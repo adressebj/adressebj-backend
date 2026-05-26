@@ -4,7 +4,6 @@
 > **Rôle** : Concevoir, implémenter, tester et déployer l'API REST d'AdresseBJ, ainsi que maintenir les trois documentations vivantes du projet.
 > **Relation avec le frontend** : Le backend définit le contrat. Le frontend s'y adapte. Tout changement de contrat doit être répercuté immédiatement dans la documentation de consommation.
 
----
 
 ## Table des matières
 
@@ -32,11 +31,11 @@ AdresseBJ est une infrastructure d'adressage numérique. Le backend est le cœur
 Le backend n'est pas un simple CRUD. Il porte quatre responsabilités spécifiques qui le distinguent :
 
 - **Génération de codes uniques** sans collision, déterministes dans leur format, permanents dans le temps.
-- **Calcul de fiabilité** des adresses à partir de deux canaux indépendants : évaluations visiteurs et remontées intégrateurs.
+- **Calcul et persistance de la fiabilité** des adresses à partir de deux canaux indépendants : évaluations visiteurs et remontées intégrateurs. Le score est dénormalisé en base pour éviter les requêtes N+1.
 - **Contrôle d'accès à deux niveaux** : JWT pour les habitants authentifiés, clé API pour les intégrateurs tiers.
 - **Maintien de trois documentations vivantes** à chaque nouvelle implémentation.
 
-Le backend ne gère pas le routage cartographique (délégué à OSRM public), ni le stockage des photos (délégué à Cloudinary). Il orchestre, il ne stocke pas ce qu'il n't a pas besoin de stocker.
+Le backend ne gère pas le routage cartographique (délégué à OSRM public), ni le stockage des photos (délégué à Cloudinary). Il orchestre, il ne stocke pas ce qu'il n'a pas besoin de stocker.
 
 ---
 
@@ -224,6 +223,10 @@ enum Role {
   ADMIN
 }
 
+// OtpCode : la vérification se fait par phone, pas par userId.
+// La relation User est supprimée car userId est inconnu au moment de
+// request-otp (l'utilisateur peut ne pas encore exister). Le phone
+// est la seule clé de lookup nécessaire.
 model OtpCode {
   id        String   @id @default(cuid())
   phone     String
@@ -231,9 +234,6 @@ model OtpCode {
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
-
-  user   User?   @relation(fields: [userId], references: [id])
-  userId String?
 
   @@index([phone])
 }
@@ -254,48 +254,52 @@ model Zone {
 // ─── Adresses ───────────────────────────────────────────────────────────────
 
 model Address {
-  id            String        @id @default(cuid())
-  code          String        @unique  // "AKP-7X3K"
-  zoneId        String
-  userId        String
-  steps         Json          // string[]
-  assembledText String
-  gpsLat        Float
-  gpsLng        Float
-  photoUrl      String
-  isActive      Boolean       @default(true)
-  deactivatedAt DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  code             String        @unique  // "AKP-7X3K" — @unique crée implicitement un index B-tree
+  zoneId           String
+  userId           String
+  steps            Json          // string[]
+  assembledText    String
+  gpsLat           Float
+  gpsLng           Float
+  photoUrl         String
+  isActive         Boolean       @default(true)
+  deactivatedAt    DateTime?
+  // Score dénormalisé : mis à jour après chaque vote ou remontée intégrateur.
+  // Évite les requêtes N+1 sur les listes admin. Null = pas encore de données.
+  reliabilityScore Int?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  zone     Zone      @relation(fields: [zoneId], references: [id])
-  user     User      @relation(fields: [userId], references: [id])
-  visits   Visit[]
-  ratings  Rating[]
-  reports  Report[]
+  zone          Zone           @relation(fields: [zoneId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  visits        Visit[]
+  ratings       Rating[]
+  reports       Report[]
   contributions Contribution[]
 
-  @@index([code])
   @@index([zoneId])
+  // Note : pas de @@index([code]) — @unique sur code crée déjà l'index.
 }
 
 // ─── Visites ─────────────────────────────────────────────────────────────────
 
 model Visit {
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   addressId   String
   departAt    DateTime
   arrivedAt   DateTime?
   source      VisitSource @default(WEB)
   apiKeyId    String?
-  finalPrice  Float?     // remonté par intégrateur (FCFA)
-  corridor    Json?      // données OSRM du trajet
-  createdAt   DateTime  @default(now())
+  finalPrice  Float?      // remonté par intégrateur (FCFA)
+  corridor    Json?       // données OSRM du trajet
+  createdAt   DateTime    @default(now())
 
   address Address  @relation(fields: [addressId], references: [id])
   apiKey  ApiKey?  @relation(fields: [apiKeyId], references: [id])
 
   @@index([addressId])
+  @@index([apiKeyId])  // utilisé pour le calcul du quota analytique par clé
 }
 
 enum VisitSource {
@@ -340,15 +344,15 @@ model Report {
 // ─── Clés API ────────────────────────────────────────────────────────────────
 
 model ApiKey {
-  id          String    @id @default(cuid())
-  key         String    @unique  // "bj_live_[16car]" — stocké en clair (pas de données sensibles)
-  label       String             // nom de l'application intégratrice
-  status      ApiKeyStatus @default(ACTIVE)
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
-  revokedAt   DateTime?
+  id        String       @id @default(cuid())
+  key       String       @unique  // "bj_live_[16car]" — stocké en clair (pas de données sensibles)
+  label     String                // nom de l'application intégratrice
+  status    ApiKeyStatus @default(ACTIVE)
+  expiresAt DateTime?
+  createdAt DateTime     @default(now())
+  revokedAt DateTime?
 
-  visits      Visit[]
+  visits Visit[]
 
   @@index([key])
 }
@@ -363,8 +367,8 @@ enum ApiKeyStatus {
 model Contribution {
   id          String             @id @default(cuid())
   addressId   String
-  direction   String?            // sens de circulation (ex: "sens unique nord-sud")
-  entrySide   String?            // côté d'entrée (ex: "côté gauche en venant du marché")
+  direction   String?            // sens de circulation
+  entrySide   String?            // côté d'entrée
   status      ContributionStatus @default(PENDING)
   reviewedAt  DateTime?
   createdAt   DateTime           @default(now())
@@ -411,10 +415,12 @@ model PushSubscription {
 
 Responsabilités : génération et vérification OTP via Africa's Talking, émission de JWT.
 
-- `POST /api/v1/auth/request-otp` — crée un `OtpCode`, envoie le SMS via Africa's Talking SDK.
-- `POST /api/v1/auth/verify-otp` — vérifie le code, crée ou retrouve le `User`, retourne un JWT.
+- `POST /api/v1/auth/request-otp` — crée un `OtpCode` lié au numéro de téléphone, invalide tout OTP précédent non utilisé pour ce numéro, envoie le SMS via Africa's Talking SDK.
+- `POST /api/v1/auth/verify-otp` — recherche l'OtpCode par `phone`, vérifie le code et l'expiration, crée ou retrouve le `User`, retourne un JWT.
 
-**Durée de vie OTP** : 5 minutes. Un seul OTP actif par numéro à la fois. L'OTP précédent est invalidé dès qu'un nouveau est demandé.
+**Durée de vie OTP** : 5 minutes. Un seul OTP actif par numéro à la fois. À chaque nouveau `request-otp`, les OTP précédents du même numéro sont invalidés par `updateMany({ where: { phone, used: false }, data: { used: true } })` avant la création du nouveau.
+
+**Lookup de vérification** : la recherche se fait exclusivement par `phone` sur `OtpCode`. Aucune relation `User` n'est nécessaire sur ce modèle — le User peut ne pas encore exister au moment de `request-otp`.
 
 **Format du SMS** : `Votre code AdresseBJ : 847291. Valable 5 minutes.`
 
@@ -422,7 +428,7 @@ Responsabilités : génération et vérification OTP via Africa's Talking, émis
 
 Responsabilités : création, modification, désactivation, résolution, évaluation, signalement.
 
-Le service `AddressesService` porte la logique de génération de code (voir section 10) et de calcul du score de fiabilité.
+Le service `AddressesService` porte la logique de génération de code, d'assemblage des instructions, et de mise à jour du score de fiabilité persisté.
 
 ### ZonesModule
 
@@ -448,11 +454,11 @@ Ce module n'interagit jamais avec des fichiers binaires. Il produit uniquement u
 
 Routes protégées par le guard `RolesGuard` + rôle `ADMIN`. Accessible uniquement avec un JWT appartenant à un utilisateur `ADMIN`.
 
-Fonctionnalités : gestion des zones, modération des adresses signalées, validation des contributions terrain, supervision du référentiel, création et révocation de clés API.
+Fonctionnalités : gestion des zones, modération des adresses signalées, validation des contributions terrain, supervision du référentiel, création et révocation de clés API. Les opérations métier (désactivation d'adresse, recalcul de score) sont déléguées aux services existants (`AddressesService`, `ApiKeysService`) — l'AdminModule ne porte pas de logique dupliquée.
 
 ### ContributionsModule
 
-Responsabilités : réception des contributions terrain soumises par les visiteurs après confirmation de navigation (sens de circulation, côté d'entrée), et exposition des endpoints admin pour les valider ou les rejeter.
+Responsabilités : réception des contributions terrain soumises par les visiteurs, et exposition des endpoints admin pour les valider ou les rejeter.
 
 Une contribution approuvée est intégrée aux instructions de l'adresse concernée (`steps` et `assembledText` recalculé). Une contribution rejetée est marquée `REJECTED` et n'affecte pas l'adresse.
 
@@ -460,12 +466,12 @@ Une contribution approuvée est intégrée aux instructions de l'adresse concern
 
 Responsabilités : gestion des souscriptions push des habitants et envoi des notifications via l'API Web Push standard (bibliothèque `web-push`).
 
+La bibliothèque `web-push` est installée via `npm install web-push`. Les clés VAPID sont générées une seule fois (`npx web-push generate-vapid-keys`) et stockées dans les variables d'environnement.
+
 **Deux déclencheurs de notification**, tous deux gérés dans `NotificationsService.notifyOwner()` :
 
-- **Seuil intermédiaire** : déclenché depuis `AddressesService` quand le score de fiabilité d'une adresse passe sous 40 après un nouveau vote ou une remontée. Message : `"Votre adresse ${code} a reçu des retours négatifs. Vérifiez que les informations sont à jour."`. Payload URL : `/dashboard/address/${code}/edit`.
-- **Désactivation administrative** : déclenché depuis `AdminModule` lors d'une désactivation par l'admin. Message : `"Votre adresse ${code} a été désactivée par un administrateur."`. Payload URL : `/dashboard`.
-
-La bibliothèque `web-push` est installée via `npm install web-push`. Les clés VAPID sont générées une seule fois (`npx web-push generate-vapid-keys`) et stockées dans les variables d'environnement.
+- **Seuil intermédiaire** : déclenché depuis `AddressesService` quand le score de fiabilité persisté d'une adresse passe sous 40 après mise à jour. Message : `"Votre adresse ${code} a reçu des retours négatifs. Vérifiez que les informations sont à jour."`.
+- **Désactivation administrative** : déclenché depuis `AdminModule` lors d'une désactivation par l'admin. Message : `"Votre adresse ${code} a été désactivée par un administrateur."`.
 
 ---
 
@@ -477,14 +483,14 @@ La bibliothèque `web-push` est installée via `npm install web-push`. Les clés
 Frontend                         Backend                        Africa's Talking
    |                                |                                  |
    |-- POST /auth/request-otp ----->|                                  |
-   |   { phone: "+22960000000" }    |                                  |
+   |   { phone: "+22960000000" }    |-- invalide OTPs précédents       |
    |                                |-- SMS API (OTP 6 chiffres) ----->|
    |                                |<- confirmation envoi ------------|
    |<-- 200 { message: "OTP sent" } |                                  |
    |                                |                                  |
    |-- POST /auth/verify-otp ------>|                                  |
    |   { phone, code }              |                                  |
-   |                                |-- vérifie OtpCode en base        |
+   |                                |-- findFirst OtpCode by phone     |
    |<-- 200 { accessToken: "..." } -|                                  |
 ```
 
@@ -508,7 +514,30 @@ Les endpoints `/api/v1/addresses/:code/resolve`, `/verify`, `/eta`, `POST /visit
 
 **Génération** : côté backend uniquement, par l'administrateur. La clé est stockée en clair dans la colonne `key` — ce ne sont pas des données sensibles équivalentes à un mot de passe. Elle est identifiable dans les logs par son préfixe `bj_live_` sans exposer le reste.
 
-**Quota analytique** : l'accès à `GET /zones/:id/analytics` est conditionné à un ratio de remontée `visits/confirm` ≥ 80 % sur 30 jours glissants. Ce ratio est calculé à la demande, pas stocké. Implémentation : `confirmedVisits / totalVisits` sur `Visit` WHERE `createdAt >= NOW() - INTERVAL '30 days'` AND `apiKeyId = $1`.
+**Quota analytique** : l'accès à `GET /zones/:id/analytics` est conditionné à un ratio de remontée ≥ 80% sur 30 jours glissants. Ce ratio est calculé à la demande, pas stocké.
+
+Implémentation du calcul :
+
+```sql
+-- Visites totales soumises par cet intégrateur sur 30 jours
+SELECT COUNT(*) FROM "Visit"
+WHERE "apiKeyId" = $1
+  AND "source" = 'API'
+  AND "createdAt" >= NOW() - INTERVAL '30 days'
+
+-- Visites confirmées (arrivedAt non null)
+SELECT COUNT(*) FROM "Visit"
+WHERE "apiKeyId" = $1
+  AND "source" = 'API'
+  AND "arrivedAt" IS NOT NULL
+  AND "createdAt" >= NOW() - INTERVAL '30 days'
+
+-- Ratio = confirmedVisits / totalVisits
+```
+
+Le filtre `apiKeyId = $1` est indispensable : le ratio ne porte que sur les trajets soumis par la clé concernée, pas sur l'ensemble du système. L'index `@@index([apiKeyId])` sur `Visit` garantit la performance de cette requête.
+
+Si `totalVisits = 0` (aucun trajet soumis), l'accès est suspendu par défaut avec le message `"Aucune donnée remontée sur 30 jours."`.
 
 ---
 
@@ -575,7 +604,7 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
 | GET | `/addresses/:code` | Public | Page publique (visiteur) |
 | GET | `/addresses/:code/resolve` | API Key | Résolution complète |
 | GET | `/addresses/:code/verify` | API Key | Score de fiabilité |
-| GET | `/addresses/:code/eta` | API Key | Estimation ETA |
+| GET | `/addresses/:code/eta` | API Key | Estimation ETA statistique |
 | POST | `/addresses/:code/rate` | Public | Évaluation visiteur |
 | POST | `/addresses/:code/report` | Public | Signalement visiteur |
 | POST | `/visits/confirm` | API Key | Remontée données intégrateur |
@@ -661,6 +690,48 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
 { "statusCode": 400, "code": "STEPS_REQUIRED", "message": "Au moins 2 étapes sont requises" }
 ```
 
+#### `GET /api/v1/addresses/:code` — Endpoint public visiteur
+
+Cet endpoint est appelé par le frontend sans clé API, y compris dans `generateMetadata` côté serveur pour les og:tags WhatsApp. Il expose toutes les données nécessaires à la page de consultation.
+
+Le masquage du score numérique est **appliqué côté backend** : le visiteur reçoit un badge qualitatif calculé par le serveur, pas le chiffre brut. Cette distinction protège contre l'inspection réseau par les créateurs cherchant à gamifier leur score.
+
+```typescript
+// Public — pas d'auth, pas de clé API
+
+// Réponse 200
+{
+  "data": {
+    "code": "AKP-7X3K",
+    "zone": { "name": "Akpakpa", "prefix": "AKP" },
+    "gps": { "lat": 6.3676, "lng": 2.4252 },
+    "photoUrl": "https://res.cloudinary.com/...",
+    "steps": ["Partir du marché Dantokpa", "..."],
+    "assembledText": "Partir du marché Dantokpa. ...",
+    "reliabilityBadge": "green",  // "green" | "orange" | "red" | null
+    // null = pas encore évalué (aucune donnée)
+    // "green" ≥ 70, "orange" 40–69, "red" < 40
+    "visitCount": 23,
+    "isActive": true,
+    "createdAt": "2026-05-01T10:00:00Z"
+  }
+}
+
+// Erreur 404
+{ "statusCode": 404, "code": "ADDRESS_NOT_FOUND" }
+
+// Erreur 410 — adresse désactivée (RFC 9110)
+{
+  "statusCode": 410,
+  "code": "ADDRESS_INACTIVE",
+  "message": "This address has been deactivated.",
+  "address_code": "AKP-7X3K",
+  "deactivated_at": "2026-03-14T10:22:00Z"
+}
+```
+
+Note : `reliabilityBadge` est `null` quand `address.reliabilityScore` est `null` — le frontend distingue "pas encore évalué" de "score mauvais" via cette valeur nulle, sans jamais voir le chiffre.
+
 #### `GET /api/v1/addresses/:code/resolve`
 
 ```typescript
@@ -702,7 +773,7 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
 {
   "data": {
     "code": "AKP-7X3K",
-    "reliabilityScore": 87,      // 0-100, réservé à l'API — le visiteur voit un badge
+    "reliabilityScore": 87,  // 0-100, chiffre brut — réservé aux intégrateurs via API Key
     "visitCount": 23,
     "isActive": true
   }
@@ -711,15 +782,17 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
 
 #### `GET /api/v1/addresses/:code/eta`
 
+L'ETA est une estimation **purement statistique** basée sur la médiane des durées de trajets confirmés vers cette adresse. Il ne s'agit pas d'un calcul de routage depuis une position — OSRM est délégué au frontend pour la navigation en temps réel. Aucun paramètre de position n'est accepté sur cet endpoint.
+
 ```typescript
 // Header: Authorization: Bearer bj_live_...
-// Query params: ?fromLat=6.35&fromLng=2.41
+// Pas de query params
 
 // Réponse 200 — données disponibles
 {
   "data": {
     "estimatedMinutes": 12,
-    "confidence": "medium",     // "low" | "medium" | "high"
+    "confidence": "medium",   // "low" | "medium" | "high"
     "basedOnVisits": 8
   }
 }
@@ -734,6 +807,8 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
   }
 }
 ```
+
+Niveaux de confiance : `"low"` si `basedOnVisits < 5`, `"medium"` si `< 20`, `"high"` si `≥ 20`.
 
 #### `POST /api/v1/visits/confirm`
 
@@ -758,7 +833,7 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
 
 ```typescript
 // Header: Authorization: Bearer bj_live_...
-// Vérifie ratio remontée >= 80% sur 30j glissants
+// Vérifie ratio remontée >= 80% sur 30j glissants pour cette clé
 
 // Réponse 200
 {
@@ -797,51 +872,13 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
 { "data": { "recorded": false, "reason": "ALREADY_VOTED_TODAY" } }
 ```
 
-#### `GET /api/v1/addresses/:code` — Endpoint public visiteur
-
-Cet endpoint est appelé par le frontend sans clé API, y compris dans `generateMetadata` côté serveur pour les og:tags WhatsApp. Il doit exposer toutes les données nécessaires à la page de consultation.
-
-```typescript
-// Public — pas d'auth, pas de clé API
-
-// Réponse 200
-{
-  "data": {
-    "code": "AKP-7X3K",
-    "zone": { "name": "Akpakpa", "prefix": "AKP" },
-    "gps": { "lat": 6.3676, "lng": 2.4252 },
-    "photoUrl": "https://res.cloudinary.com/...",
-    "steps": ["Partir du marché Dantokpa", "..."],
-    "assembledText": "Partir du marché Dantokpa. ...",
-    "reliabilityScore": null,   // null si aucune donnée (score 0) → badge "non évalué" côté frontend
-    "visitCount": 0,
-    "isActive": true,
-    "createdAt": "2026-05-01T10:00:00Z"
-  }
-}
-
-// Erreur 404
-{ "statusCode": 404, "code": "ADDRESS_NOT_FOUND" }
-
-// Erreur 410 — adresse désactivée
-{
-  "statusCode": 410,
-  "code": "ADDRESS_INACTIVE",
-  "message": "This address has been deactivated.",
-  "address_code": "AKP-7X3K",
-  "deactivated_at": "2026-03-14T10:22:00Z"
-}
-```
-
-Note : `reliabilityScore` est `null` (et non `0`) quand aucune donnée n'existe — le frontend l'utilise pour distinguer "pas encore évalué" de "score zéro". La valeur `0` est un score légitimement mauvais ; `null` est l'absence de données.
-
 #### `POST /api/v1/addresses/:code/contribution`
 
 ```typescript
 // Public — pas d'auth
 // Body
 {
-  "direction": "Sens unique nord-sud",   // optionnel
+  "direction": "Sens unique nord-sud",             // optionnel
   "entrySide": "Côté gauche en venant du marché"  // optionnel
 }
 // Au moins un des deux champs doit être présent
@@ -855,8 +892,41 @@ Note : `reliabilityScore` est `null` (et non `0`) quand aucune donnée n'existe 
 // Erreur 404 — adresse inconnue
 { "statusCode": 404, "code": "ADDRESS_NOT_FOUND" }
 
-// Erreur 410 — adresse désactivée (pas de contribution sur une adresse inactive)
+// Erreur 410 — adresse désactivée
 { "statusCode": 410, "code": "ADDRESS_INACTIVE" }
+```
+
+#### `GET /api/v1/admin/addresses`
+
+```typescript
+// Header: Authorization: Bearer <JWT Admin>
+// Query params:
+//   ?search=AKP-7X3K        (recherche par code)
+//   ?search=+22960000000    (recherche par téléphone habitant)
+//   ?zone=zone_cuid
+//   ?status=active | inactive | reported
+//   ?page=1&limit=20
+
+// Réponse 200
+{
+  "data": [
+    {
+      "code": "AKP-7X3K",
+      "zone": { "name": "Akpakpa" },
+      "ownerPhone": "+229601****00",   // masqué partiellement
+      "isActive": true,
+      "reliabilityScore": 72,   // lu directement depuis le champ dénormalisé — zéro query additionnelle
+      "reportCount": 0,
+      "createdAt": "2026-05-01T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "timestamp": "...",
+    "total": 142,
+    "page": 1,
+    "limit": 20
+  }
+}
 ```
 
 #### `GET /api/v1/admin/contributions`
@@ -893,7 +963,7 @@ Note : `reliabilityScore` est `null` (et non `0`) quand aucune donnée n'existe 
 // Effet : status = APPROVED, reviewedAt = now()
 //         Les champs direction/entrySide approuvés sont ajoutés
 //         comme nouvelles étapes dans address.steps
-//         assembledText est recalculé automatiquement
+//         assembledText est recalculé automatiquement via buildAssembledText()
 
 // Réponse 200
 { "data": { "contributionId": "...", "status": "APPROVED" } }
@@ -927,8 +997,7 @@ Note : `reliabilityScore` est `null` (et non `0`) quand aucune donnée n'existe 
 // Réponse 201
 { "data": { "subscribed": true } }
 
-// Comportement : si un PushSubscription existe déjà avec cet endpoint pour cet utilisateur,
-// on le met à jour (upsert) plutôt que de créer un doublon.
+// Comportement : upsert si un PushSubscription existe déjà avec cet endpoint.
 ```
 
 #### `DELETE /api/v1/notifications/unsubscribe`
@@ -948,17 +1017,19 @@ Note : `reliabilityScore` est `null` (et non `0`) quand aucune donnée n'existe 
 
 ```typescript
 // Header: Authorization: Bearer <JWT>
-// Body
-{ "phone": "+22960000000" }  // confirmation : doit correspondre au compte connecté
+// Body : { "phone": "+22960000000" }
+// Note : le body sur une requête DELETE est non-standard selon RFC 9110.
+// En pratique Express/NestJS le gère correctement, mais certains proxies
+// peuvent l'ignorer. Documenter cette limitation dans DEPLOYMENT.md.
+// Alternative en production : POST /auth/account/delete.
 
 // Comportement :
 // 1. Vérifie que phone correspond à l'utilisateur du JWT
 // 2. Désactive toutes les adresses de l'utilisateur (isActive = false)
-// 3. Efface les données personnelles : phone → "[supprimé]", email → null
-// 4. Révoque tous les OTP actifs
+// 3. Efface les données personnelles : phone → "[supprimé-{userId}]", email → null
+// 4. Révoque tous les OTP actifs (used = true)
 // 5. Supprime toutes les PushSubscriptions
-// 6. Les visites, ratings et contributions sont conservés de manière anonymisée
-//    (userId disassocié, données agrégées préservées pour le référentiel)
+// 6. Les visites, ratings et contributions sont conservés anonymisés
 
 // Réponse 200
 { "data": { "deleted": true, "purgeScheduledAt": "2026-06-16T00:00:00Z" } }
@@ -966,39 +1037,6 @@ Note : `reliabilityScore` est `null` (et non `0`) quand aucune donnée n'existe 
 
 // Erreur 400 — téléphone ne correspond pas
 { "statusCode": 400, "code": "PHONE_MISMATCH" }
-```
-
-#### `GET /api/v1/admin/addresses`
-
-```typescript
-// Header: Authorization: Bearer <JWT Admin>
-// Query params:
-//   ?search=AKP-7X3K        (recherche par code)
-//   ?search=+22960000000    (recherche par téléphone habitant)
-//   ?zone=zone_cuid
-//   ?status=active | inactive | reported
-//   ?page=1&limit=20
-
-// Réponse 200
-{
-  "data": [
-    {
-      "code": "AKP-7X3K",
-      "zone": { "name": "Akpakpa" },
-      "ownerPhone": "+229601****00",   // masqué partiellement pour l'admin
-      "isActive": true,
-      "reliabilityScore": 72,
-      "reportCount": 0,
-      "createdAt": "2026-05-01T10:00:00Z"
-    }
-  ],
-  "meta": {
-    "timestamp": "...",
-    "total": 142,
-    "page": 1,
-    "limit": 20
-  }
-}
 ```
 
 ---
@@ -1022,63 +1060,128 @@ private generateSequence(): string {
 }
 
 async generateUniqueCode(zonePrefix: string): Promise<string> {
-  let code: string;
-  let attempts = 0;
-  do {
-    if (attempts > 50) throw new Error('CODE_GENERATION_EXHAUSTED');
-    code = `${zonePrefix}-${this.generateSequence()}`;
-    attempts++;
-  } while (await this.prisma.address.findUnique({ where: { code } }));
-  return code;
+  // Le pattern check-then-insert présente une race condition théorique :
+  // deux requêtes simultanées peuvent générer le même code, vérifier
+  // qu'il est libre, et la seconde échouer sur la contrainte @unique.
+  // On laisse la contrainte DB faire son travail et on gère P2002 avec retry.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = `${zonePrefix}-${this.generateSequence()}`;
+    const exists = await this.prisma.address.findUnique({ where: { code } });
+    if (!exists) return code;
+    // Collision détectée (probabilité ~1/million par zone) → retry
+  }
+  throw new Error('CODE_GENERATION_EXHAUSTED');
 }
 ```
 
-**Garantie de non-collision** : vérification d'unicité en base avant persistance. Le pool par zone est de 32⁴ = 1 048 576 combinaisons — zéro risque de saturation au stade prototype.
+À l'insertion en base, si une collision survient malgré la vérification (race condition dans une fenêtre de quelques millisecondes), Prisma lève une `PrismaClientKnownRequestError` avec code `P2002`. Le service appelant doit attraper cette erreur et relancer `generateUniqueCode` — ce comportement est documenté dans les tests.
 
-**Permanence** : un code ne change jamais après création, même si l'adresse est modifiée ou désactivée. Les migrations de zones ne réattribuent jamais un code existant.
+**Garantie de non-collision** : pool de 32⁴ = 1 048 576 combinaisons par zone. Zéro risque de saturation au stade prototype.
+
+**Permanence** : un code ne change jamais après création. Les migrations de zones ne réattribuent jamais un code existant.
 
 ### Assemblage du texte d'instructions
 
 ```typescript
 buildAssembledText(steps: string[]): string {
-  return steps.map(s => s.trim()).join('. ') + '.';
+  return steps
+    .map(s => s.trim().replace(/\.+$/, ''))  // supprime la ponctuation finale éventuelle
+    .filter(s => s.length > 0)               // élimine les steps vides
+    .join('. ') + '.';
 }
 ```
+
+Sans le `replace(/\.+$/, '')`, une étape saisie avec un point final (`"Partir du marché Dantokpa."`) produit `"Partir du marché Dantokpa.. Prendre la 2ème rue"` — double ponctuation silencieuse. Le `filter` évite un step vide qui produirait `"Prendre la rue. . Portail bleu"`.
 
 L'`assembledText` est recalculé automatiquement à chaque modification des `steps`. Il n'est jamais saisi directement.
 
-### Calcul du score de fiabilité
+### Score de fiabilité — calcul et persistance
 
-Le score est un entier entre 0 et 100, calculé à la demande (pas mis en cache dans ce prototype).
+Le score est un entier entre 0 et 100, **persisté sur le modèle `Address`** (`reliabilityScore Int?`). Il est mis à jour après chaque événement qui l'affecte (vote visiteur ou remontée intégrateur). Il n'est **pas** recalculé à la demande — ce pattern produirait des requêtes N+1 sur `GET /admin/addresses` qui charge 20 adresses avec leur score.
 
 ```typescript
-async computeReliabilityScore(addressId: string): Promise<number> {
+// addresses.service.ts
+async refreshReliabilityScore(addressId: string): Promise<void> {
   const [ratings, visits] = await Promise.all([
     this.prisma.rating.findMany({ where: { addressId } }),
-    this.prisma.visit.findMany({ where: { addressId, arrivedAt: { not: null } } }),
+    this.prisma.visit.findMany({
+      where: { addressId, arrivedAt: { not: null } },
+    }),
   ]);
 
-  if (ratings.length === 0 && visits.length === 0) return 0;
+  // Aucune donnée des deux canaux → score null (pas encore évalué)
+  if (ratings.length === 0 && visits.length === 0) {
+    await this.prisma.address.update({
+      where: { id: addressId },
+      data: { reliabilityScore: null },
+    });
+    return;
+  }
 
-  const conformCount = ratings.filter(r => r.type === 'CONFORM').length;
-  const ratingScore = ratings.length > 0
-    ? (conformCount / ratings.length) * 100
-    : 50; // neutre si aucune évaluation
+  let ratingScore: number;
+  if (ratings.length > 0) {
+    const conformCount = ratings.filter(r => r.type === 'CONFORM').length;
+    ratingScore = (conformCount / ratings.length) * 100;
+  } else {
+    // Visites confirmées mais aucun vote : le canal évaluation est neutre (50).
+    // Ce comportement est intentionnel et documenté : une adresse fréquentée
+    // mais non évaluée n'est pas pénalisée, mais elle n'obtient pas non plus
+    // le bonus évaluation maximal. Score résultant avec 20 visites et 0 vote :
+    // 50 * 0.6 + 100 * 0.4 = 70 — comportement attendu et acceptable.
+    ratingScore = 50;
+  }
 
-  const visitScore = Math.min(visits.length * 5, 100); // plafonné à 100
+  const visitScore = Math.min(visits.length * 5, 100);
+  const newScore = Math.round(ratingScore * 0.6 + visitScore * 0.4);
 
-  // Pondération : 60% évaluations manuelles, 40% volume de visites confirmées
-  return Math.round(ratingScore * 0.6 + visitScore * 0.4);
+  await this.prisma.address.update({
+    where: { id: addressId },
+    data: { reliabilityScore: newScore },
+  });
+
+  // Déclencher notification si le score franchit le seuil à la baisse
+  const address = await this.prisma.address.findUnique({
+    where: { id: addressId },
+    select: { reliabilityScore: true, userId: true, code: true },
+  });
+
+  if (address && address.reliabilityScore !== null) {
+    const previousScore = address.reliabilityScore;
+    if (newScore < 40 && previousScore >= 40) {
+      await this.notificationsService.notifyOwner(address.userId, {
+        message: `Votre adresse ${address.code} a reçu des retours négatifs. Vérifiez que les informations sont à jour.`,
+        url: `/dashboard/address/${address.code}/edit`,
+      });
+    }
+  }
 }
 ```
 
-**Niveaux d'exposition** (non négociables) :
+`refreshReliabilityScore` est appelé depuis :
+- `AddressesService.rateAddress()` — après enregistrement d'un vote visiteur
+- `VisitsService.confirmVisit()` — après enregistrement d'une remontée intégrateur
+
+### Conversion score → badge (endpoint public)
+
+```typescript
+// addresses.service.ts
+toReliabilityBadge(score: number | null): 'green' | 'orange' | 'red' | null {
+  if (score === null) return null;  // pas encore de données
+  if (score >= 70) return 'green';
+  if (score >= 40) return 'orange';
+  return 'red';
+}
+```
+
+Cette conversion est appliquée **côté backend** avant de composer la réponse de `GET /addresses/:code` (public). Le chiffre brut `reliabilityScore` n'apparaît jamais dans cette réponse — uniquement dans `/verify` (API Key) et le dashboard admin.
+
+**Niveaux d'exposition du score** :
 
 | Destinataire | Ce qu'il reçoit |
 |---|---|
-| Visiteur (page publique) | Badge qualitatif uniquement (vert/orange/rouge) — calculé côté frontend à partir du score |
-| Développeur tiers (API) | Score numérique brut + visitCount |
-| Administrateur (dashboard) | Score + historique des signalements |
+| Visiteur (page publique) | `reliabilityBadge: "green" \| "orange" \| "red" \| null` — calculé côté backend |
+| Développeur tiers (API `/verify`) | `reliabilityScore: 0–100` + `visitCount` |
+| Administrateur (dashboard) | `reliabilityScore` + historique des signalements |
 
 ### Anti-abus sur les votes visiteurs
 
@@ -1090,18 +1193,17 @@ buildAbuseHash(ip: string, userAgent: string, code: string): string {
 }
 ```
 
-Le hash est non-réversible. Il ne permet pas d'identifier l'utilisateur. Il sert uniquement de filtre anti-abus par jour et par adresse. Un vote avec un hash déjà présent en base pour aujourd'hui est silencieusement ignoré (`recorded: false`).
+Le hash est non-réversible. Il sert uniquement de filtre anti-abus par jour et par adresse. Un vote avec un hash déjà présent en base pour aujourd'hui est silencieusement ignoré (`recorded: false, reason: "ALREADY_VOTED_TODAY"`).
 
 ### Gestion des adresses désactivées
 
 Quand une adresse est désactivée (par son créateur ou par l'admin), `isActive = false` et `deactivatedAt = now()`. Le code n'est **jamais** réattribué.
 
-- Endpoint `GET /addresses/:code` (public) → affiche un message générique sans exposer les données.
+- Endpoint public `GET /addresses/:code` → message générique sans exposer les données.
 - Endpoints API (`/resolve`, `/verify`, `/eta`) → HTTP 410 avec corps structuré.
+- Endpoint contribution `POST /addresses/:code/contribution` → HTTP 410 (pas de contribution sur une adresse inactive).
 
 ### Déclenchement des notifications push
-
-Les notifications push sont envoyées via la bibliothèque `web-push` en Node.js. `NotificationsService` expose une méthode `notifyOwner(userId, payload)` appelée depuis d'autres services — jamais directement depuis un controller.
 
 ```typescript
 // notifications.service.ts
@@ -1118,50 +1220,30 @@ async notifyOwner(userId: string, payload: PushPayload): Promise<void> {
 
   await Promise.allSettled(
     subscriptions.map((sub) =>
-      webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        message,
-      ).catch(async (err) => {
-        // Endpoint expiré (410) → supprimer la souscription automatiquement
-        if (err.statusCode === 410) {
-          await this.prisma.pushSubscription.delete({ where: { id: sub.id } });
-        }
-      })
-    )
+      webpush
+        .sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          message,
+        )
+        .catch(async (err) => {
+          // Endpoint expiré (410) → supprimer la souscription automatiquement
+          if (err.statusCode === 410) {
+            await this.prisma.pushSubscription.delete({ where: { id: sub.id } });
+          }
+        }),
+    ),
   );
 }
 ```
 
-**Déclencheur 1 — Seuil intermédiaire (score < 40)** : appelé dans `AddressesService` après chaque vote ou remontée intégrateur qui fait baisser le score.
-
-```typescript
-// Dans addresses.service.ts, après computeReliabilityScore()
-if (newScore < 40 && previousScore >= 40) {
-  await this.notificationsService.notifyOwner(address.userId, {
-    message: `Votre adresse ${address.code} a reçu des retours négatifs. Vérifiez que les informations sont à jour.`,
-    url: `/dashboard/address/${address.code}/edit`,
-  });
-}
-```
-
-**Déclencheur 2 — Désactivation administrative** : appelé dans `AdminModule` lors d'une désactivation par l'admin.
-
-```typescript
-// Dans admin.controller.ts, après désactivation
-await this.notificationsService.notifyOwner(address.userId, {
-  message: `Votre adresse ${address.code} a été désactivée par un administrateur.`,
-  url: `/dashboard`,
-});
-```
-
-`Promise.allSettled` garantit qu'une souscription défaillante ne bloque pas les autres. Les notifications sont best-effort — leur échec ne doit jamais faire échouer l'opération principale (vote, désactivation).
+`Promise.allSettled` garantit qu'une souscription défaillante ne bloque pas les autres. Les notifications sont best-effort — leur échec ne doit **jamais** faire échouer l'opération principale (vote, désactivation).
 
 ### Suppression de compte — logique de purge
 
-La suppression est en deux temps : anonymisation immédiate + purge planifiée à 30 jours.
+La suppression est en deux temps : anonymisation immédiate + purge physique planifiée à 30 jours.
 
 ```typescript
-// auth.service.ts — deleteAccount()
+// auth.service.ts
 async deleteAccount(userId: string): Promise<void> {
   await this.prisma.$transaction([
     // 1. Désactiver toutes les adresses
@@ -1170,13 +1252,16 @@ async deleteAccount(userId: string): Promise<void> {
       data: { isActive: false, deactivatedAt: new Date() },
     }),
     // 2. Anonymiser les données personnelles immédiatement
+    // Le suffixe userId préserve l'unicité de la contrainte @unique sur phone
     this.prisma.user.update({
       where: { id: userId },
       data: { phone: `[supprimé-${userId}]`, email: null },
     }),
     // 3. Invalider tous les OTP actifs
+    // Note : OtpCode n'est plus relié à User — lookup par phone original
+    // nécessaire avant anonymisation, ou stocker le phone dans la transaction
     this.prisma.otpCode.updateMany({
-      where: { userId },
+      where: { phone: /* phone récupéré avant anonymisation */ '' },
       data: { used: true },
     }),
     // 4. Supprimer les souscriptions push
@@ -1187,7 +1272,9 @@ async deleteAccount(userId: string): Promise<void> {
 }
 ```
 
-La purge définitive à 30 jours (suppression du User) peut être gérée par un cron NestJS (`@nestjs/schedule`) ou un job Render.com. Pour le prototype, l'anonymisation immédiate est suffisante — la purge physique est une amélioration production.
+> **Note d'implémentation sur l'OTP** : suite à la suppression de la relation `OtpCode → User`, l'invalidation des OTP dans `deleteAccount` nécessite de récupérer le `phone` de l'utilisateur **avant** l'anonymisation dans la transaction. Récupérer le User d'abord, puis construire la transaction avec le `phone` original en mémoire.
+
+La purge définitive à 30 jours (suppression physique du User) peut être gérée par un cron NestJS (`@nestjs/schedule`) ou un job Render.com. Pour le prototype, l'anonymisation immédiate est suffisante — la purge physique est une amélioration production.
 
 ---
 
@@ -1201,11 +1288,12 @@ Couvrent la logique métier pure, sans base de données.
 
 | Unité | Ce qui est testé |
 |-------|-----------------|
-| `generateUniqueCode` | Zéro collision sur 1 000 codes générés en parallèle (mock Prisma) |
-| `buildAssembledText` | Assemblage correct des steps, gestion des espaces, steps vides |
-| `computeReliabilityScore` | Score correct pour 0 votes / 100% conformes / 50-50 / volume de visites |
-| `buildAbuseHash` | Déterministe (même input → même hash), différent si date différente |
-| `generateSequence` | Caractères exclus (0, O, I, L) jamais présents dans la sortie |
+| `generateUniqueCode` | Zéro collision sur 1 000 codes générés (mock Prisma), alphabet correct, gestion P2002 → retry |
+| `buildAssembledText` | Assemblage correct des steps, suppression de ponctuation finale, steps vides filtrés, step unique |
+| `refreshReliabilityScore` | Score correct pour : 0 votes + 0 visites (null), 100% conformes, 50-50, visites sans votes (score 70), passage sous 40 → notification déclenchée |
+| `toReliabilityBadge` | null → null, 0 → "red", 39 → "red", 40 → "orange", 69 → "orange", 70 → "green", 100 → "green" |
+| `buildAbuseHash` | Déterministe (même input → même hash), différent si date différente, différent si code différent |
+| `generateSequence` | Caractères exclus (0, O, I, L) jamais présents dans la sortie sur 10 000 générations |
 
 ```bash
 # Exécution
@@ -1220,18 +1308,20 @@ Couvrent les endpoints avec une vraie base de données (PostgreSQL de test, isol
 
 | Endpoint | Cas nominal | Cas d'erreur |
 |----------|-------------|--------------|
-| `POST /auth/request-otp` | OTP envoyé (mock AT) | Téléphone invalide → 400 |
-| `POST /auth/verify-otp` | JWT retourné | OTP expiré → 401, OTP invalide → 401 |
+| `POST /auth/request-otp` | OTP envoyé (mock AT), OTP précédent invalidé | Téléphone invalide → 400 |
+| `POST /auth/verify-otp` | JWT retourné, User créé si inexistant | OTP expiré → 401, OTP invalide → 401 |
 | `DELETE /auth/account` | Compte anonymisé, adresses désactivées | Téléphone non-correspondant → 400 |
 | `POST /addresses` | Adresse créée, code généré | Hors périmètre → 400, sans JWT → 401 |
-| `GET /addresses/:code` | Données complètes retournées | Code inexistant → 404, désactivé → 410 |
+| `GET /addresses/:code` | Données complètes avec `reliabilityBadge` | Code inexistant → 404, désactivé → 410 |
 | `GET /addresses/:code/resolve` | Données complètes | Code inexistant → 404, désactivé → 410, clé révoquée → 401 |
-| `GET /addresses/:code/verify` | Score retourné | Clé invalide → 401 |
+| `GET /addresses/:code/verify` | Score numérique retourné | Clé invalide → 401 |
+| `GET /addresses/:code/eta` | ETA null si données insuffisantes, ETA calculé si données suffisantes | Clé invalide → 401, désactivé → 410 |
 | `POST /addresses/:code/contribution` | Contribution créée PENDING | Aucun champ → 400, adresse inactive → 410 |
+| `POST /addresses/:code/rate` | recorded: true, score mis à jour en base | Deuxième vote → recorded: false |
 | `POST /visits/confirm` | Visit enregistrée | Timestamps invalides → 400 |
 | `GET /zones/:id/analytics` | Analytics retournées | Quota insuffisant → 403 |
-| `POST /notifications/subscribe` | Souscription créée/mise à jour | Sans JWT → 401 |
-| `PATCH /admin/contributions/:id/approve` | Contribution APPROVED, steps mis à jour | Sans rôle ADMIN → 403 |
+| `POST /notifications/subscribe` | Souscription créée/upsert | Sans JWT → 401 |
+| `PATCH /admin/contributions/:id/approve` | Contribution APPROVED, steps mis à jour, assembledText recalculé | Sans rôle ADMIN → 403 |
 | `PATCH /admin/contributions/:id/reject` | Contribution REJECTED | Sans rôle ADMIN → 403 |
 
 ### Smoke test de démo
@@ -1244,15 +1334,17 @@ Script automatisé exécutable avant chaque déploiement ou démonstration :
 // 1. Request OTP → 200
 // 2. Verify OTP → JWT
 // 3. Signature Cloudinary → signature valide
-// 4. Create Address → code généré
-// 5. Resolve Address (avec clé API de test) → données complètes
-// 6. Rate Address → recorded: true
-// 7. Confirm Visit → visitId retourné
+// 4. Create Address → code généré, reliabilityScore null
+// 5. GET /addresses/:code → reliabilityBadge null (pas encore évalué)
+// 6. Rate Address → recorded: true, score mis à jour en base
+// 7. GET /addresses/:code/verify (clé API de test) → reliabilityScore non null
+// 8. Confirm Visit → visitId retourné
+// 9. GET /addresses/:code/eta → basedOnVisits >= 1
 ```
 
 ### Coverage cible
 
-**≥ 70 % de couverture sur les services**. Les controllers et les guards ont une couverture minimale (tests d'intégration suffisent). Pas d'obsession du chiffre — la qualité des assertions compte plus que le pourcentage.
+**≥ 70% de couverture sur les services**. Les controllers et les guards ont une couverture minimale (tests d'intégration suffisent). Pas d'obsession du chiffre — la qualité des assertions compte plus que le pourcentage.
 
 ---
 
@@ -1290,9 +1382,9 @@ Ces trois documents sont maintenus **simultanément** à chaque nouvel endpoint 
 **Principes** :
 - Zéro terminologie NestJS ou Prisma.
 - Zéro détail d'implémentation.
-- URL de base, headers requis, shape exacte des requêtes et réponses, codes d'erreur machines à gérer, comportements spéciaux (410 vs 404).
+- URL de base, headers requis, shape exacte des requêtes et réponses, codes d'erreur machines à gérer, comportements spéciaux (410 vs 404, `reliabilityBadge` vs `reliabilityScore`).
 - Un tableau de `ENV` frontend requis (base URL, etc.).
-- Mis à jour avant que le frontend commence à brancher un endpoint.
+- Mis à jour **avant** que le frontend commence à brancher un endpoint.
 
 ### 3. `docs/DEPLOYMENT.md` — Documentation de déploiement
 
@@ -1306,6 +1398,7 @@ Ces trois documents sont maintenus **simultanément** à chaque nouvel endpoint 
 - Configuration cron-job.org pour le réveil backend.
 - Checklist de vérification post-déploiement (smoke test).
 - Procédure de rollback.
+- **Note sur `DELETE /auth/account` avec body** : comportement à vérifier sur l'environnement Render (proxy éventuel).
 
 ---
 
@@ -1349,18 +1442,18 @@ Les commits suivent le format **Conventional Commits** :
 
 ```
 feat(addresses): add code generation with collision check
-test(addresses): add unit tests for generateUniqueCode
+test(addresses): add unit tests for generateUniqueCode including P2002 retry
 fix(auth): handle expired OTP correctly
 docs(api): update frontend contract with /resolve endpoint
-chore(prisma): add Rating model and migration
+chore(prisma): add reliabilityScore field to Address model
 ```
 
 **Règle absolue** : un commit = une unité fonctionnelle testée. Pas de commits "WIP", "fix", "misc". Chaque commit sur `main` doit laisser l'application dans un état déployable.
 
 ### Granularité des commits — exemples
 
-- Ajout du modèle Prisma + migration → `chore(prisma): add Address model`
-- Implémentation du service de génération de code + tests unitaires → `feat(addresses): implement code generation` + `test(addresses): zero-collision test on 1000 codes`
+- Ajout du modèle Prisma + migration → `chore(prisma): add Address model with reliabilityScore`
+- Implémentation du service de génération de code + tests unitaires → `feat(addresses): implement code generation` + `test(addresses): zero-collision test on 1000 codes, P2002 retry`
 - Endpoint `/resolve` + tests d'intégration + mise à jour des trois docs → trois commits séparés ou un commit groupé si atomiquement liés.
 
 ### Ce qui ne passe pas en review
@@ -1370,6 +1463,8 @@ chore(prisma): add Rating model and migration
 - Migration Prisma sans le code métier correspondant dans le même commit.
 - `console.log` laissé en production.
 - Clés ou secrets en dur dans le code.
+- Score numérique brut retourné sur l'endpoint public `GET /addresses/:code`.
+- `refreshReliabilityScore` appelé sans mise à jour en base (retour volatile interdit).
 
 ### Gestion des branches
 
