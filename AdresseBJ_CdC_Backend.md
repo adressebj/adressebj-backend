@@ -204,18 +204,21 @@ datasource db {
 }
 
 // ─── Utilisateurs ───────────────────────────────────────────────────────────
+// Modèle aplati avec Role enum. Pas d'héritage par table concrète —
+// les développeurs tiers interagissent via ApiKey, pas via un compte User.
 
 model User {
-  id        String   @id @default(cuid())
-  phone     String   @unique
-  email     String?
-  role      Role     @default(CREATOR)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  phone         String   @unique
+  email         String?
+  role          Role     @default(CREATOR)
+  publicConsent Boolean  @default(false)  // consentement à la visibilité publique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   addresses         Address[]
-  otpCodes          OtpCode[]
   pushSubscriptions PushSubscription[]
+  notifications     Notification[]
 }
 
 enum Role {
@@ -224,9 +227,8 @@ enum Role {
 }
 
 // OtpCode : la vérification se fait par phone, pas par userId.
-// La relation User est supprimée car userId est inconnu au moment de
-// request-otp (l'utilisateur peut ne pas encore exister). Le phone
-// est la seule clé de lookup nécessaire.
+// Pas de relation User — l'utilisateur peut ne pas encore exister
+// au moment du request-otp. Le phone est la seule clé de lookup.
 model OtpCode {
   id        String   @id @default(cuid())
   phone     String
@@ -243,9 +245,11 @@ model OtpCode {
 model Zone {
   id        String   @id @default(cuid())
   name      String
-  prefix    String   @unique   // "AKP", "CAD", "FID"...
-  polygon   Json?              // GeoJSON polygon OSM
+  commune   String                // Cotonou, Calavi, Abomey-Calavi...
+  prefix    String   @unique      // "AKP", "CAD", "FID"...
+  polygon   Json?                 // GeoJSON polygon OSM
   isActive  Boolean  @default(true)
+  sourceOsm Boolean  @default(false)  // true si importé depuis Overpass API
   createdAt DateTime @default(now())
 
   addresses Address[]
@@ -254,32 +258,60 @@ model Zone {
 // ─── Adresses ───────────────────────────────────────────────────────────────
 
 model Address {
-  id               String        @id @default(cuid())
-  code             String        @unique  // "AKP-7X3K" — @unique crée implicitement un index B-tree
+  id               String    @id @default(cuid())
+  code             String    @unique  // "AKP-7X3K" — @unique crée implicitement un index B-tree
   zoneId           String
   userId           String
-  steps            Json          // string[]
-  assembledText    String
   gpsLat           Float
   gpsLng           Float
-  photoUrl         String
-  isActive         Boolean       @default(true)
+  isActive         Boolean   @default(true)
   deactivatedAt    DateTime?
   // Score dénormalisé : mis à jour après chaque vote ou remontée intégrateur.
   // Évite les requêtes N+1 sur les listes admin. Null = pas encore de données.
   reliabilityScore Int?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  zone          Zone           @relation(fields: [zoneId], references: [id])
-  user          User           @relation(fields: [userId], references: [id])
+  zone          Zone              @relation(fields: [zoneId], references: [id])
+  user          User              @relation(fields: [userId], references: [id])
+  instruction   AccessInstruction?
+  photos        Photo[]
   visits        Visit[]
-  ratings       Rating[]
+  evaluations   Evaluation[]
   reports       Report[]
   contributions Contribution[]
+  notifications Notification[]
 
   @@index([zoneId])
   // Note : pas de @@index([code]) — @unique sur code crée déjà l'index.
+}
+
+// ─── Instructions d'accès (composition 1:1 avec Address) ────────────────────
+// Table séparée pour normalisation. Le 1:1 partage la PK avec Address.
+// assembledText = steps.join('. ') + '.' — toujours recalculé, jamais saisi.
+
+model AccessInstruction {
+  addressId     String @id
+  steps         Json      // string[] — tableau d'étapes ordonnées
+  assembledText String    // texte assemblé, dérivé de steps
+
+  address Address @relation(fields: [addressId], references: [id], onDelete: Cascade)
+}
+
+// ─── Photos ─────────────────────────────────────────────────────────────────
+// Relation 1:N avec Address — extensible à plusieurs photos par adresse.
+// Les métadonnées (taille, date) restent côté backend malgré le stockage Cloudinary.
+
+model Photo {
+  id         String   @id @default(cuid())
+  addressId  String
+  url        String   // URL Cloudinary (secure_url)
+  sizeBytes  Int      // poids en octets après transformation q_auto,f_auto
+  uploadedAt DateTime @default(now())
+
+  address Address @relation(fields: [addressId], references: [id], onDelete: Cascade)
+
+  @@index([addressId])
 }
 
 // ─── Visites ─────────────────────────────────────────────────────────────────
@@ -289,17 +321,25 @@ model Visit {
   addressId   String
   departAt    DateTime
   arrivedAt   DateTime?
+  status      VisitStatus @default(IN_PROGRESS)  // état explicite, pas déduit
   source      VisitSource @default(WEB)
   apiKeyId    String?
   finalPrice  Float?      // remonté par intégrateur (FCFA)
   corridor    Json?       // données OSRM du trajet
   createdAt   DateTime    @default(now())
 
-  address Address  @relation(fields: [addressId], references: [id])
-  apiKey  ApiKey?  @relation(fields: [apiKeyId], references: [id])
+  address     Address      @relation(fields: [addressId], references: [id])
+  apiKey      ApiKey?      @relation(fields: [apiKeyId], references: [id])
+  evaluations Evaluation[]
 
   @@index([addressId])
   @@index([apiKeyId])  // utilisé pour le calcul du quota analytique par clé
+}
+
+enum VisitStatus {
+  IN_PROGRESS   // navigation en cours
+  CONFIRMED     // arrivée confirmée (arrivedAt renseigné)
+  ABANDONED     // visite abandonnée (jamais confirmée après un délai raisonnable)
 }
 
 enum VisitSource {
@@ -307,14 +347,49 @@ enum VisitSource {
   API        // confirmé par intégrateur
 }
 
-// ─── Évaluations visiteurs ───────────────────────────────────────────────────
+// ─── Évaluations ─────────────────────────────────────────────────────────────
+// Chaque évaluation est traçable : source (VISITOR = vote anonyme, VISIT = remontée
+// intégrateur) et lien optionnel vers la visite d'origine. Permet de diagnostiquer
+// d'où viennent les dégradations de score.
 
-model Rating {
-  id        String     @id @default(cuid())
+model Evaluation {
+  id        String         @id @default(cuid())
   addressId String
-  type      RatingType
-  abuseHash String     // hash(IP + UA + code + date) — non-réversible
-  createdAt DateTime   @default(now())
+  visitId   String?        // lien optionnel vers la visite source
+  type      EvaluationType
+  source    EvalSource     // d'où vient cette évaluation
+  abuseHash String         // hash(IP + UA + code + date) — non-réversible
+  createdAt DateTime       @default(now())
+
+  address Address @relation(fields: [addressId], references: [id])
+  visit   Visit?  @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@index([addressId])
+  @@index([abuseHash])
+  @@index([visitId])
+}
+
+enum EvaluationType {
+  CONFORM
+  NONCONFORM
+}
+
+enum EvalSource {
+  VISITOR   // vote anonyme depuis la page publique
+  VISIT     // dérivé d'une visite confirmée par intégrateur
+}
+
+// ─── Signalements ────────────────────────────────────────────────────────────
+// Workflow 3 états : PENDING → RESOLVED / REJECTED.
+// abuseHash pour anti-spam (un signalement par IP+UA+adresse+jour).
+
+model Report {
+  id        String       @id @default(cuid())
+  addressId String
+  reason    String       // motif du signalement — obligatoire
+  abuseHash String       // hash(IP + UA + code + date)
+  status    ReportStatus @default(PENDING)
+  createdAt DateTime     @default(now())
 
   address Address @relation(fields: [addressId], references: [id])
 
@@ -322,35 +397,26 @@ model Rating {
   @@index([abuseHash])
 }
 
-enum RatingType {
-  CONFORM
-  NONCONFORM
-}
-
-// ─── Signalements ────────────────────────────────────────────────────────────
-
-model Report {
-  id        String   @id @default(cuid())
-  addressId String
-  message   String?
-  resolved  Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  address Address @relation(fields: [addressId], references: [id])
-
-  @@index([addressId])
+enum ReportStatus {
+  PENDING    // en attente d'examen par l'admin
+  RESOLVED   // signalement traité (action prise)
+  REJECTED   // signalement jugé infondé
 }
 
 // ─── Clés API ────────────────────────────────────────────────────────────────
+// Infos développeur portées sur la clé (pas de compte User pour les devs tiers).
 
 model ApiKey {
-  id        String       @id @default(cuid())
-  key       String       @unique  // "bj_live_[16car]" — stocké en clair (pas de données sensibles)
-  label     String                // nom de l'application intégratrice
-  status    ApiKeyStatus @default(ACTIVE)
-  expiresAt DateTime?
-  createdAt DateTime     @default(now())
-  revokedAt DateTime?
+  id          String       @id @default(cuid())
+  key         String       @unique  // "bj_live_[16car]" — stocké en clair
+  label       String                // nom de l'application intégratrice
+  companyName String?               // nom de l'entreprise du développeur
+  sector      String?               // secteur d'activité (logistique, fintech...)
+  contact     String?               // email ou téléphone du développeur
+  status      ApiKeyStatus @default(ACTIVE)
+  expiresAt   DateTime?
+  createdAt   DateTime     @default(now())
+  revokedAt   DateTime?
 
   visits Visit[]
 
@@ -363,12 +429,14 @@ enum ApiKeyStatus {
 }
 
 // ─── Contributions terrain (visiteurs) ──────────────────────────────────────
+// abuseHash pour empêcher le spam de contributions anonymes.
 
 model Contribution {
   id          String             @id @default(cuid())
   addressId   String
   direction   String?            // sens de circulation
   entrySide   String?            // côté d'entrée
+  abuseHash   String             // hash(IP + UA + code + date)
   status      ContributionStatus @default(PENDING)
   reviewedAt  DateTime?
   createdAt   DateTime           @default(now())
@@ -377,6 +445,7 @@ model Contribution {
 
   @@index([addressId])
   @@index([status])
+  @@index([abuseHash])
 }
 
 enum ContributionStatus {
@@ -385,7 +454,35 @@ enum ContributionStatus {
   REJECTED
 }
 
-// ─── Souscriptions push (notifications habitant) ─────────────────────────────
+// ─── Notifications (persistées) ──────────────────────────────────────────────
+// Historique des notifications envoyées à l'habitant. Permet un centre de
+// notifications côté frontend et la traçabilité des avertissements admin.
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  addressId String?          // adresse concernée (optionnel)
+  message   String
+  type      NotificationType
+  read      Boolean          @default(false)
+  sentAt    DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([addressId])
+}
+
+enum NotificationType {
+  SCORE_DEGRADED   // score passé sous le seuil
+  DEACTIVATION     // adresse désactivée par l'admin
+  INFO             // notification informative générale
+}
+
+// ─── Souscriptions push ──────────────────────────────────────────────────────
+// Endpoints Web Push pour l'envoi des notifications. Distinct de Notification
+// (qui est le contenu) — PushSubscription est le canal de livraison.
 
 model PushSubscription {
   id        String   @id @default(cuid())
