@@ -3,7 +3,9 @@
 > **Destinataire** : Développeur backend (BADAROU Mouwafic)
 > **Rôle** : Concevoir, implémenter, tester et déployer l'API REST d'AdresseBJ, ainsi que maintenir les trois documentations vivantes du projet.
 > **Relation avec le frontend** : Le backend définit le contrat. Le frontend s'y adapte. Tout changement de contrat doit être répercuté immédiatement dans la documentation de consommation.
+> **Version** : 2.0 — alignée sur CDC principal v4
 
+---
 
 ## Table des matières
 
@@ -26,16 +28,16 @@
 
 ## 1. Contexte et rôle du backend
 
-AdresseBJ est une infrastructure d'adressage numérique. Le backend est le cœur du système : il génère les codes adresse, orchestre l'authentification OTP, expose l'API REST consommée à la fois par le frontend et par les développeurs tiers, et maintient la fiabilité du référentiel.
-
-Le backend n'est pas un simple CRUD. Il porte quatre responsabilités spécifiques qui le distinguent :
-
-- **Génération de codes uniques** sans collision, déterministes dans leur format, permanents dans le temps.
-- **Calcul et persistance de la fiabilité** des adresses à partir de deux canaux indépendants : évaluations visiteurs et remontées intégrateurs. Le score est dénormalisé en base pour éviter les requêtes N+1.
-- **Contrôle d'accès à deux niveaux** : JWT pour les habitants authentifiés, clé API pour les intégrateurs tiers.
-- **Maintien de trois documentations vivantes** à chaque nouvelle implémentation.
+AdresseBJ est une infrastructure d'adressage numérique. Le backend est le cœur du système : il génère les codes adresse, orchestre l'authentification, expose l'API REST consommée à la fois par le frontend et par les développeurs tiers, et maintient la fiabilité du référentiel.
 
 Le backend ne gère pas le routage cartographique (délégué à OSRM public), ni le stockage des photos (délégué à Cloudinary). Il orchestre, il ne stocke pas ce qu'il n'a pas besoin de stocker.
+
+**Quatre responsabilités spécifiques :**
+
+- **Génération de codes uniques** sans collision, déterministes dans leur format, permanents dans le temps.
+- **Gestion du cycle de vie des adresses** : machine à états, re-validation sur modification, modération à quatre files.
+- **Contrôle d'accès à trois niveaux** : JWT avec rôles (HABITANT / MODERATOR / ADMIN) pour les comptes, clé API pour les intégrateurs tiers.
+- **Maintien de trois documentations vivantes** à chaque nouvelle implémentation.
 
 ---
 
@@ -43,27 +45,117 @@ Le backend ne gère pas le routage cartographique (délégué à OSRM public), n
 
 Toutes les versions sont vérifiées au **17 mai 2026**. Aucune ne doit être substituée sans justification explicite.
 
-| Rôle | Technologie | Version cible |
-|------|-------------|---------------|
-| Framework | NestJS | **11.x** (11.1.9+) |
-| Langage | TypeScript | 5.x |
-| ORM | Prisma | **7.x** (7.7+) |
-| Base de données | PostgreSQL | 16+ (Render.com) |
-| Validation | class-validator + class-transformer | std NestJS 11 |
-| Authentification | @nestjs/jwt + @nestjs/passport | std NestJS 11 |
-| Tests | Jest (natif NestJS) | std NestJS 11 |
-| OTP SMS | Africa's Talking SDK | dernière stable |
-| Upload photos | Cloudinary SDK (Node) | dernière stable |
-| Documentation API | Swagger via @nestjs/swagger | std NestJS 11 |
-| Déploiement | Render.com (plan gratuit) | — |
-| Réveil backend | cron-job.org (ping HTTP, 7h–23h) | — |
+|
+ Rôle 
+|
+ Technologie 
+|
+ Version cible 
+|
+|
+------
+|
+-------------
+|
+---------------
+|
+|
+ Framework 
+|
+ NestJS 
+|
+**
+11.x
+**
+ (11.1.9+) 
+|
+|
+ Langage 
+|
+ TypeScript 
+|
+ 5.x 
+|
+|
+ ORM 
+|
+ Prisma 
+|
+**
+7.x
+**
+ (7.7+) 
+|
+|
+ Base de données 
+|
+ PostgreSQL 
+|
+ 16+ (Render.com) 
+|
+|
+ Validation 
+|
+ class-validator + class-transformer 
+|
+ std NestJS 11 
+|
+|
+ Authentification 
+|
+ @nestjs/jwt + @nestjs/passport + bcrypt 
+|
+ std NestJS 11 
+|
+|
+ Tests 
+|
+ Jest (natif NestJS) 
+|
+ std NestJS 11 
+|
+|
+ OTP SMS 
+|
+ Africa's Talking SDK 
+|
+ dernière stable 
+|
+|
+ Upload photos 
+|
+ Cloudinary SDK (Node) 
+|
+ dernière stable 
+|
+|
+ Documentation API 
+|
+ Swagger via @nestjs/swagger 
+|
+ std NestJS 11 
+|
+|
+ Déploiement 
+|
+ Render.com (plan gratuit) 
+|
+ — 
+|
+|
+ Réveil backend 
+|
+ cron-job.org (ping HTTP, 7h–23h) 
+|
+ — 
+|
 
 **Ce qu'on n'utilise pas et pourquoi :**
 
-- Pas de Redis — aucun besoin de cache distribué ou de session à ce stade.
-- Pas de CQRS, pas d'Event Sourcing — sur-ingénierie injustifiée pour ce périmètre.
-- Pas de microservices — une application monolithique modulaire est exactement ce qu'il faut ici.
-- Pas de TypeORM — Prisma 7 offre un meilleur DX, une type-safety native, des migrations propres, et une intégration NestJS plus moderne.
+- Pas de Redis : aucun besoin de cache distribué ou de session à ce stade.
+- Pas de CQRS, pas d'Event Sourcing : sur-ingénierie injustifiée pour ce périmètre.
+- Pas de microservices : une application monolithique modulaire est exactement ce qu'il faut ici.
+- Pas de TypeORM : Prisma 7 offre un meilleur DX, une type-safety native, des migrations propres.
 
 ---
 
@@ -75,19 +167,20 @@ L'architecture suit le pattern standard NestJS : **Controller → Service → Re
 
 ```
 src/
-├── main.ts                     # Bootstrap, swagger setup, global pipes
-├── app.module.ts               # Module racine
+├── main.ts
+├── app.module.ts
 ├── prisma/
 │   ├── prisma.module.ts
-│   └── prisma.service.ts       # PrismaClient singleton
+│   └── prisma.service.ts
 ├── auth/
 │   ├── auth.module.ts
-│   ├── auth.controller.ts      # POST /auth/request-otp, POST /auth/verify-otp
+│   ├── auth.controller.ts      # /auth/* (register, login, verify-otp, forgot-password, etc.)
 │   ├── auth.service.ts
 │   ├── strategies/
 │   │   └── jwt.strategy.ts
 │   └── guards/
 │       ├── jwt-auth.guard.ts
+│       ├── roles.guard.ts      # vérifie le rôle dans le JWT payload
 │       └── api-key.guard.ts
 ├── addresses/
 │   ├── addresses.module.ts
@@ -95,7 +188,16 @@ src/
 │   ├── addresses.service.ts
 │   └── dto/
 │       ├── create-address.dto.ts
+│       ├── update-address.dto.ts
 │       └── rate-address.dto.ts
+├── rattachements/
+│   ├── rattachements.module.ts
+│   ├── rattachements.controller.ts
+│   └── rattachements.service.ts
+├── propositions/
+│   ├── propositions.module.ts
+│   ├── propositions.controller.ts  # /addresses/:code/propositions + /addresses/:code/propositions/:id/integrate|decline
+│   └── propositions.service.ts
 ├── zones/
 │   ├── zones.module.ts
 │   ├── zones.controller.ts
@@ -107,27 +209,27 @@ src/
 ├── api-keys/
 │   ├── api-keys.module.ts
 │   └── api-keys.service.ts
+├── moderation/
+│   ├── moderation.module.ts
+│   └── moderation.controller.ts  # /moderation/* — MODERATOR + ADMIN
 ├── admin/
 │   ├── admin.module.ts
-│   └── admin.controller.ts     # Routes /admin/** protégées par rôle ADMIN
-├── contributions/
-│   ├── contributions.module.ts
-│   ├── contributions.controller.ts  # POST /addresses/:code/contribution, routes admin
-│   └── contributions.service.ts
+│   └── admin.controller.ts       # /admin/* — ADMIN uniquement
 ├── notifications/
 │   ├── notifications.module.ts
-│   ├── notifications.controller.ts  # POST /notifications/subscribe, DELETE /notifications/unsubscribe
-│   └── notifications.service.ts     # Envoi push (Web Push API) + logique de déclenchement
+│   ├── notifications.controller.ts  # /notifications/* — lecture en app + push subscribe
+│   └── notifications.service.ts     # stockage en base + envoi push (web-push)
 ├── upload/
 │   ├── upload.module.ts
-│   └── upload.service.ts       # Génération signature Cloudinary
+│   └── upload.service.ts
 └── common/
     ├── filters/
     │   └── http-exception.filter.ts
     ├── interceptors/
-    │   └── transform.interceptor.ts  # Enveloppe toutes les réponses en { data, meta }
+    │   └── transform.interceptor.ts
     └── decorators/
-        └── current-user.decorator.ts
+        ├── current-user.decorator.ts
+        └── roles.decorator.ts        # @Roles(Role.ADMIN, Role.MODERATOR)
 ```
 
 ### Conventions de réponse API
@@ -152,34 +254,25 @@ Les erreurs suivent le format NestJS standard enrichi :
 }
 ```
 
-Le champ `code` est une constante machine, documentée, consommable programmatiquement par le frontend et les intégrateurs.
-
 ### Variables d'environnement
 
 ```env
-# Base de données
 DATABASE_URL=postgresql://...
-
-# JWT
 JWT_SECRET=...
 JWT_EXPIRES_IN=7d
 
-# Africa's Talking
 AT_USERNAME=...
 AT_API_KEY=...
 AT_SENDER_ID=AdresseBJ
 
-# Cloudinary
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
 
-# App
 NODE_ENV=production
 PORT=3000
 ALLOWED_ORIGINS=https://adressebj.vercel.app
 
-# Web Push (VAPID) — générer avec: npx web-push generate-vapid-keys
 VAPID_PUBLIC_KEY=...
 VAPID_PRIVATE_KEY=...
 VAPID_SUBJECT=mailto:contact@adressebj.bj
@@ -203,220 +296,304 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Utilisateurs ───────────────────────────────────────────────────────────
-// Modèle aplati avec Role enum. Pas d'héritage par table concrète —
-// les développeurs tiers interagissent via ApiKey, pas via un compte User.
+// ─── Utilisateurs ────────────────────────────────────────────────────────────
 
 model User {
-  id            String   @id @default(cuid())
-  phone         String   @unique
-  email         String?
-  role          Role     @default(CREATOR)
-  publicConsent Boolean  @default(false)  // consentement à la visibilité publique
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String    @id @default(cuid())
+  phone            String?   @unique       // Habitant uniquement
+  email            String?   @unique       // Modérateur/Admin obligatoire ; Habitant optionnel
+  firstName        String?
+  lastName         String?
+  passwordHash     String?                 // bcrypt — Habitant et Mod/Admin
+  role             Role      @default(HABITANT)
+  isPhoneVerified  Boolean   @default(false)
+  suspendedAt      DateTime?
+  suspensionReason String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   addresses         Address[]
+  rattachements     Rattachement[]
+  ratings           Rating[]
+  reports           Report[]
+  contributions     ContributionTerrain[]
+  propositions      PropositionModification[] @relation("contributorPropositions")
+  otpCodes          OtpCode[]
   pushSubscriptions PushSubscription[]
   notifications     Notification[]
 }
 
 enum Role {
-  CREATOR
+  HABITANT
+  MODERATOR
   ADMIN
 }
 
-// OtpCode : la vérification se fait par phone, pas par userId.
-// Pas de relation User — l'utilisateur peut ne pas encore exister
-// au moment du request-otp. Le phone est la seule clé de lookup.
 model OtpCode {
   id        String   @id @default(cuid())
   phone     String
   code      String
+  purpose   OtpPurpose @default(REGISTRATION)
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String?
+
   @@index([phone])
 }
 
-// ─── Zones ──────────────────────────────────────────────────────────────────
+enum OtpPurpose {
+  REGISTRATION     // vérification numéro à l'inscription
+  PHONE_CHANGE     // re-vérification lors du changement de numéro
+}
+
+// ─── Zones ───────────────────────────────────────────────────────────────────
 
 model Zone {
   id        String   @id @default(cuid())
   name      String
-  commune   String                // Cotonou, Calavi, Abomey-Calavi...
-  prefix    String   @unique      // "AKP", "CAD", "FID"...
-  polygon   Json?                 // GeoJSON polygon OSM
+  prefix    String   @unique   // "AKP", "CAD", "FID"...
+  polygon   Json?              // GeoJSON polygon OSM
   isActive  Boolean  @default(true)
-  sourceOsm Boolean  @default(false)  // true si importé depuis Overpass API
   createdAt DateTime @default(now())
 
   addresses Address[]
 }
 
-// ─── Adresses ───────────────────────────────────────────────────────────────
+// ─── Adresses ────────────────────────────────────────────────────────────────
 
 model Address {
-  id               String    @id @default(cuid())
-  code             String    @unique  // "AKP-7X3K" — @unique crée implicitement un index B-tree
-  zoneId           String
-  userId           String
-  gpsLat           Float
-  gpsLng           Float
-  isActive         Boolean   @default(true)
-  deactivatedAt    DateTime?
-  // Score dénormalisé : mis à jour après chaque vote ou remontée intégrateur.
-  // Évite les requêtes N+1 sur les listes admin. Null = pas encore de données.
-  reliabilityScore Int?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id              String        @id @default(cuid())
+  code            String        @unique  // "AKP-7X3K"
+  zoneId          String
+  userId          String
+  status          AddressStatus @default(DRAFT)
+  rejectionReason String?
 
-  zone          Zone              @relation(fields: [zoneId], references: [id])
-  user          User              @relation(fields: [userId], references: [id])
-  instruction   AccessInstruction?
-  photos        Photo[]
+  // Version publiée courante (ou dernière version avant re-validation)
+  steps           Json          // string[]
+  assembledText   String
+  gpsLat          Float
+  gpsLng          Float
+  photoUrl        String
+
+  // Version en attente lors d'une re-validation (null si aucune en cours)
+  // Champ JSON : { steps?, assembledText?, gpsLat?, gpsLng?, photoUrl? }
+  pendingUpdate   Json?
+
+  deactivatedAt   DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  zone          Zone                    @relation(fields: [zoneId], references: [id])
+  user          User                    @relation(fields: [userId], references: [id])
   visits        Visit[]
-  evaluations   Evaluation[]
+  ratings       Rating[]
   reports       Report[]
-  contributions Contribution[]
-  notifications Notification[]
+  contributions ContributionTerrain[]
+  rattachements Rattachement[]
+  propositions  PropositionModification[]
 
+  @@index([code])
   @@index([zoneId])
-  // Note : pas de @@index([code]) — @unique sur code crée déjà l'index.
+  @@index([status])
 }
 
-// ─── Instructions d'accès (composition 1:1 avec Address) ────────────────────
-// Table séparée pour normalisation. Le 1:1 partage la PK avec Address.
-// assembledText = steps.join('. ') + '.' — toujours recalculé, jamais saisi.
-
-model AccessInstruction {
-  addressId     String @id
-  steps         Json      // string[] — tableau d'étapes ordonnées
-  assembledText String    // texte assemblé, dérivé de steps
-
-  address Address @relation(fields: [addressId], references: [id], onDelete: Cascade)
+enum AddressStatus {
+  DRAFT               // brouillon — invisible publiquement
+  PENDING_VALIDATION  // en attente — invisible publiquement
+  PUBLISHED           // publiée — accessible publiquement
+  REJECTED            // rejetée — invisible publiquement, le créateur peut corriger
+  DEACTIVATED         // désactivée — code non réattribuable, page informative
 }
 
-// ─── Photos ─────────────────────────────────────────────────────────────────
-// Relation 1:N avec Address — extensible à plusieurs photos par adresse.
-// Les métadonnées (taille, date) restent côté backend malgré le stockage Cloudinary.
+// ─── Rattachements ───────────────────────────────────────────────────────────
 
-model Photo {
-  id         String   @id @default(cuid())
-  addressId  String
-  url        String   // URL Cloudinary (secure_url)
-  sizeBytes  Int      // poids en octets après transformation q_auto,f_auto
-  uploadedAt DateTime @default(now())
+model Rattachement {
+  id        String   @id @default(cuid())
+  userId    String
+  addressId String
+  createdAt DateTime @default(now())
 
-  address Address @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  user         User                    @relation(fields: [userId], references: [id])
+  address      Address                 @relation(fields: [addressId], references: [id])
+  propositions PropositionModification[]
+
+  @@unique([userId, addressId])
+  @@index([userId])
+  @@index([addressId])
+}
+
+// ─── Propositions de modification (contributeurs rattachés) ──────────────────
+
+model PropositionModification {
+  id              String            @id @default(cuid())
+  rattachementId  String
+  contributorId   String
+  addressId       String
+  type            PropositionType
+  // { photoUrl? } | { steps?, assembledText? } | { gpsLat?, gpsLng? }
+  proposedData    Json
+  status          PropositionStatus @default(PENDING)
+  moderatorId     String?
+  rejectionReason String?           // renseigné si MODERATOR_REJECTED
+  reviewedAt      DateTime?
+  ownerDecidedAt  DateTime?
+  createdAt       DateTime          @default(now())
+
+  rattachement Rattachement @relation(fields: [rattachementId], references: [id])
+  contributor  User         @relation("contributorPropositions", fields: [contributorId], references: [id])
+  address      Address      @relation(fields: [addressId], references: [id])
 
   @@index([addressId])
+  @@index([status])
+}
+
+enum PropositionType {
+  PHOTO
+  INSTRUCTIONS
+  GPS
+}
+
+enum PropositionStatus {
+  PENDING              // en attente du modérateur
+  MODERATOR_APPROVED   // approuvée par modérateur, en attente de décision du propriétaire
+  MODERATOR_REJECTED   // rejetée par modérateur (raison transmise au contributeur)
+  OWNER_INTEGRATED     // intégrée par le propriétaire
+  OWNER_DECLINED       // ignorée par le propriétaire
 }
 
 // ─── Visites ─────────────────────────────────────────────────────────────────
 
 model Visit {
-  id          String      @id @default(cuid())
-  addressId   String
-  departAt    DateTime
-  arrivedAt   DateTime?
-  status      VisitStatus @default(IN_PROGRESS)  // état explicite, pas déduit
-  source      VisitSource @default(WEB)
-  apiKeyId    String?
-  finalPrice  Float?      // remonté par intégrateur (FCFA)
-  corridor    Json?       // données OSRM du trajet
-  createdAt   DateTime    @default(now())
+  id         String      @id @default(cuid())
+  addressId  String
+  departAt   DateTime
+  arrivedAt  DateTime?
+  source     VisitSource @default(WEB)
+  apiKeyId   String?
+  finalPrice Float?      // remonté par intégrateur (FCFA)
+  createdAt  DateTime    @default(now())
 
-  address     Address      @relation(fields: [addressId], references: [id])
-  apiKey      ApiKey?      @relation(fields: [apiKeyId], references: [id])
-  evaluations Evaluation[]
+  address Address  @relation(fields: [addressId], references: [id])
+  apiKey  ApiKey?  @relation(fields: [apiKeyId], references: [id])
 
   @@index([addressId])
-  @@index([apiKeyId])  // utilisé pour le calcul du quota analytique par clé
-}
-
-enum VisitStatus {
-  IN_PROGRESS   // navigation en cours
-  CONFIRMED     // arrivée confirmée (arrivedAt renseigné)
-  ABANDONED     // visite abandonnée (jamais confirmée après un délai raisonnable)
 }
 
 enum VisitSource {
-  WEB        // navigation depuis la PWA
-  API        // confirmé par intégrateur
+  WEB
+  API
 }
 
-// ─── Évaluations ─────────────────────────────────────────────────────────────
-// Chaque évaluation est traçable : source (VISITOR = vote anonyme, VISIT = remontée
-// intégrateur) et lien optionnel vers la visite d'origine. Permet de diagnostiquer
-// d'où viennent les dégradations de score.
+// ─── Évaluations (notation 5 étoiles) ────────────────────────────────────────
 
-model Evaluation {
-  id        String         @id @default(cuid())
+model Rating {
+  id        String   @id @default(cuid())
   addressId String
-  visitId   String?        // lien optionnel vers la visite source
-  type      EvaluationType
-  source    EvalSource     // d'où vient cette évaluation
-  abuseHash String         // hash(IP + UA + code + date) — non-réversible
-  createdAt DateTime       @default(now())
+  userId    String                   // JWT requis — évaluation authentifiée
+  stars     Int                      // 1 à 5
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   address Address @relation(fields: [addressId], references: [id])
-  visit   Visit?  @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  user    User    @relation(fields: [userId], references: [id])
 
+  @@unique([userId, addressId])      // une seule évaluation par habitant par adresse
   @@index([addressId])
-  @@index([abuseHash])
-  @@index([visitId])
-}
-
-enum EvaluationType {
-  CONFORM
-  NONCONFORM
-}
-
-enum EvalSource {
-  VISITOR   // vote anonyme depuis la page publique
-  VISIT     // dérivé d'une visite confirmée par intégrateur
 }
 
 // ─── Signalements ────────────────────────────────────────────────────────────
-// Workflow 3 états : PENDING → RESOLVED / REJECTED.
-// abuseHash pour anti-spam (un signalement par IP+UA+adresse+jour).
 
 model Report {
-  id        String       @id @default(cuid())
-  addressId String
-  reason    String       // motif du signalement — obligatoire
-  abuseHash String       // hash(IP + UA + code + date)
-  status    ReportStatus @default(PENDING)
-  createdAt DateTime     @default(now())
+  id         String       @id @default(cuid())
+  addressId  String
+  userId     String                   // JWT requis — signalement authentifié
+  message    String?
+  status     ReportStatus @default(PENDING)
+  resolvedAt DateTime?
+  createdAt  DateTime     @default(now())
 
   address Address @relation(fields: [addressId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
   @@index([addressId])
-  @@index([abuseHash])
+  @@index([status])
 }
 
 enum ReportStatus {
-  PENDING    // en attente d'examen par l'admin
-  RESOLVED   // signalement traité (action prise)
-  REJECTED   // signalement jugé infondé
+  PENDING
+  RESOLVED
+  IGNORED
 }
 
-// ─── Clés API ────────────────────────────────────────────────────────────────
-// Infos développeur portées sur la clé (pas de compte User pour les devs tiers).
+// ─── Contributions terrain ────────────────────────────────────────────────────
+
+model ContributionTerrain {
+  id              String             @id @default(cuid())
+  addressId       String
+  userId          String             // JWT requis — contribution authentifiée
+  content         String             // texte libre (ex: "sens unique nord-sud, portail côté gauche")
+  status          ContributionStatus @default(PENDING)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+
+  address Address @relation(fields: [addressId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([addressId])
+  @@index([status])
+}
+
+enum ContributionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Notifications en application ────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  message   String
+  data      Json?            // { addressCode?, reason?, propositionId? }
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([readAt])
+}
+
+enum NotificationType {
+  ADDRESS_VALIDATED
+  ADDRESS_REJECTED
+  ADDRESS_DEACTIVATED_BY_MODERATOR
+  SCORE_DEGRADED
+  PROPOSITION_MODERATOR_APPROVED    // notifié au propriétaire pour décision
+  PROPOSITION_MODERATOR_REJECTED    // notifié au contributeur
+  PROPOSITION_OWNER_INTEGRATED      // notifié au contributeur
+  PROPOSITION_OWNER_DECLINED        // notifié au contributeur
+  RATTACHMENT_ADDRESS_DEACTIVATED   // notifié aux contributeurs rattachés
+  ACCOUNT_SUSPENDED
+}
+
+// ─── Clés API ─────────────────────────────────────────────────────────────────
 
 model ApiKey {
-  id          String       @id @default(cuid())
-  key         String       @unique  // "bj_live_[16car]" — stocké en clair
-  label       String                // nom de l'application intégratrice
-  companyName String?               // nom de l'entreprise du développeur
-  sector      String?               // secteur d'activité (logistique, fintech...)
-  contact     String?               // email ou téléphone du développeur
-  status      ApiKeyStatus @default(ACTIVE)
-  expiresAt   DateTime?
-  createdAt   DateTime     @default(now())
-  revokedAt   DateTime?
+  id        String       @id @default(cuid())
+  key       String       @unique  // "bj_live_[16car]"
+  label     String
+  status    ApiKeyStatus @default(ACTIVE)
+  expiresAt DateTime?
+  createdAt DateTime     @default(now())
+  revokedAt DateTime?
 
   visits Visit[]
 
@@ -428,61 +605,7 @@ enum ApiKeyStatus {
   REVOKED
 }
 
-// ─── Contributions terrain (visiteurs) ──────────────────────────────────────
-// abuseHash pour empêcher le spam de contributions anonymes.
-
-model Contribution {
-  id          String             @id @default(cuid())
-  addressId   String
-  direction   String?            // sens de circulation
-  entrySide   String?            // côté d'entrée
-  abuseHash   String             // hash(IP + UA + code + date)
-  status      ContributionStatus @default(PENDING)
-  reviewedAt  DateTime?
-  createdAt   DateTime           @default(now())
-
-  address Address @relation(fields: [addressId], references: [id])
-
-  @@index([addressId])
-  @@index([status])
-  @@index([abuseHash])
-}
-
-enum ContributionStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-// ─── Notifications (persistées) ──────────────────────────────────────────────
-// Historique des notifications envoyées à l'habitant. Permet un centre de
-// notifications côté frontend et la traçabilité des avertissements admin.
-
-model Notification {
-  id        String           @id @default(cuid())
-  userId    String
-  addressId String?          // adresse concernée (optionnel)
-  message   String
-  type      NotificationType
-  read      Boolean          @default(false)
-  sentAt    DateTime         @default(now())
-
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  address Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([addressId])
-}
-
-enum NotificationType {
-  SCORE_DEGRADED   // score passé sous le seuil
-  DEACTIVATION     // adresse désactivée par l'admin
-  INFO             // notification informative générale
-}
-
-// ─── Souscriptions push ──────────────────────────────────────────────────────
-// Endpoints Web Push pour l'envoi des notifications. Distinct de Notification
-// (qui est le contenu) — PushSubscription est le canal de livraison.
+// ─── Souscriptions push ───────────────────────────────────────────────────────
 
 model PushSubscription {
   id        String   @id @default(cuid())
@@ -502,7 +625,7 @@ model PushSubscription {
 
 - Chaque modification de schéma déclenche une migration Prisma nommée : `prisma migrate dev --name <description-courte>`.
 - Les migrations sont commitées avec le code qui les nécessite, dans le même commit.
-- Jamais de `prisma db push` en production — uniquement `prisma migrate deploy`.
+- Jamais de `prisma db push` en production : uniquement `prisma migrate deploy`.
 
 ---
 
@@ -510,161 +633,275 @@ model PushSubscription {
 
 ### AuthModule
 
-Responsabilités : génération et vérification OTP via Africa's Talking, émission de JWT.
+Responsabilités : inscription et connexion par rôle, vérification OTP (inscription + changement de numéro), émission de JWT.
 
-- `POST /api/v1/auth/request-otp` — crée un `OtpCode` lié au numéro de téléphone, invalide tout OTP précédent non utilisé pour ce numéro, envoie le SMS via Africa's Talking SDK.
-- `POST /api/v1/auth/verify-otp` — recherche l'OtpCode par `phone`, vérifie le code et l'expiration, crée ou retrouve le `User`, retourne un JWT.
+**Endpoints :**
 
-**Durée de vie OTP** : 5 minutes. Un seul OTP actif par numéro à la fois. À chaque nouveau `request-otp`, les OTP précédents du même numéro sont invalidés par `updateMany({ where: { phone, used: false }, data: { used: true } })` avant la création du nouveau.
+|
+ Route 
+|
+ Usage 
+|
+|
+-------
+|
+-------
+|
+|
+`POST /auth/register`
+|
+ Inscription Habitant : phone + password + name optionnel → envoi OTP 
+|
+|
+`POST /auth/verify-otp`
+|
+ Vérifie OTP inscription ou changement de numéro → active le compte ou met à jour le numéro 
+|
+|
+`POST /auth/login`
+|
+ Connexion Habitant : phone + password → JWT 
+|
+|
+`POST /auth/admin/login`
+|
+ Connexion Modérateur/Admin : email + password → JWT 
+|
+|
+`POST /auth/request-otp`
+|
+ Demande OTP pour changement de numéro (JWT requis) 
+|
+|
+`POST /auth/forgot-password`
+|
+ Demande reset mdp Modérateur/Admin (email → lien reset) 
+|
+|
+`POST /auth/reset-password`
+|
+ Nouveau mdp avec token de reset 
+|
+|
+`DELETE /auth/account`
+|
+ Suppression de compte Habitant 
+|
 
-**Lookup de vérification** : la recherche se fait exclusivement par `phone` sur `OtpCode`. Aucune relation `User` n'est nécessaire sur ce modèle — le User peut ne pas encore exister au moment de `request-otp`.
+**Durée de vie OTP** : 5 minutes. Un seul OTP actif par numéro/purpose à la fois.
 
-**Format du SMS** : `Votre code AdresseBJ : 847291. Valable 5 minutes.`
+**Passwords** : hashés avec bcrypt (cost factor 12). Jamais stockés en clair.
+
+**JWT payload** : `{ sub: userId, role, iat, exp }`.
+
+**Suspension** : `JwtAuthGuard` ou `RolesGuard` vérifie `user.suspendedAt`. Si suspendu, retourne `403 USER_SUSPENDED` sur toute route qui modifie des données. La lecture publique n'est pas affectée.
 
 ### AddressesModule
 
-Responsabilités : création, modification, désactivation, résolution, évaluation, signalement.
+Responsabilités : machine à états (DRAFT → PENDING_VALIDATION → PUBLISHED / REJECTED / DEACTIVATED), génération de code, calcul de score, gestion des rattachements.
 
-Le service `AddressesService` porte la logique de génération de code, d'assemblage des instructions, et de mise à jour du score de fiabilité persisté.
+**Points critiques :**
+
+- Toute soumission passe à `PENDING_VALIDATION`. Le modérateur valide ou rejette.
+- Toute modification d'une adresse PUBLISHED soumet `pendingUpdate` et repasse à `PENDING_VALIDATION`. Les champs principaux (version publiée) restent inchangés jusqu'à validation.
+- Sur approbation d'une modification : les champs de `pendingUpdate` sont appliqués aux champs principaux et `pendingUpdate` est remis à `null`.
+- Sur rejet d'une modification : `pendingUpdate` est effacé, statut revient à `PUBLISHED`, version précédente reste active.
+
+### RattementsModule
+
+Responsabilités : création et suppression de rattachements. Vérification préalable : l'adresse doit être PUBLISHED.
+
+Un Habitant suspendu ne peut pas créer de nouveau rattachement.
+
+### PropositionsModule
+
+Responsabilités : soumission de propositions de modification par les contributeurs rattachés, décision du propriétaire (intégrer ou décliner).
+
+Vérification préalable à toute soumission : un `Rattachement` actif doit exister pour le couple `(userId, addressId)`.
+
+**Flow de validation en deux temps :**
+
+1. Modérateur approuve → statut `MODERATOR_APPROVED` → notification au propriétaire.
+2. Propriétaire intègre (`OWNER_INTEGRATED`) : les données proposées sont appliquées à l'adresse. Propriétaire décline (`OWNER_DECLINED`) : aucune modification.
+
+Dans les deux cas, le contributeur est notifié.
+
+### ModerationModule
+
+Route prefix : `/moderation`. Accessible à `Role.MODERATOR` et `Role.ADMIN`.
+
+Quatre files indépendantes :
+
+|
+ File 
+|
+ Route 
+|
+ Description 
+|
+|
+------
+|
+-------
+|
+-------------
+|
+|
+ Adresses en attente 
+|
+`GET /moderation/addresses?status=PENDING_VALIDATION`
+|
+ Adresses soumises par des Habitants 
+|
+|
+ Signalements en attente 
+|
+`GET /moderation/reports?status=PENDING`
+|
+ Signalements sur adresses publiées 
+|
+|
+ Contributions terrain en attente 
+|
+`GET /moderation/contributions?status=PENDING`
+|
+ Contributions soumises après navigation 
+|
+|
+ Propositions en attente 
+|
+`GET /moderation/propositions?status=PENDING`
+|
+ Modifications proposées par des contributeurs rattachés 
+|
+
+Le Modérateur agit sur le contenu, jamais sur la visibilité finale d'une adresse — sauf désactivation sur signalement, qui lui est accordée.
+
+### AdminModule
+
+Route prefix : `/admin`. Accessible à `Role.ADMIN` uniquement.
+
+Fonctionnalités au-delà de la modération :
+
+- Gestion des zones géographiques (création, édition, activation/désactivation).
+- Gestion des comptes Modérateurs (création, désactivation, réactivation, reset mdp).
+- Suspension et levée de suspension des comptes Habitants.
+- Gestion des clés API (création, révocation).
+- Supervision du référentiel (recherche par code, zone, téléphone habitant).
 
 ### ZonesModule
 
 Responsabilités : liste des zones actives, analytics par zone.
 
-Un script d'initialisation `scripts/seed-zones.ts` importe les quartiers depuis l'API Overpass (OpenStreetMap) et génère les préfixes automatiquement. Ce script est exécuté une seule fois à l'initialisation, pas à chaque démarrage.
+Le script `scripts/seed-zones.ts` importe les quartiers depuis l'API Overpass une seule fois.
 
 ### VisitsModule
 
-Responsabilités : enregistrement des départs de navigation (horodatage), confirmation d'arrivée, remontée de données intégrateurs.
-
-### ApiKeysModule
-
-Service uniquement — pas de controller public. Les clés sont créées et révoquées exclusivement par l'administrateur via l'AdminModule.
-
-### UploadModule
-
-Responsabilités : générer une signature Cloudinary côté serveur pour permettre un upload direct depuis le frontend.
-
-Ce module n'interagit jamais avec des fichiers binaires. Il produit uniquement un `{ signature, timestamp, apiKey, cloudName }` utilisable par le frontend pour un upload direct vers Cloudinary.
-
-### AdminModule
-
-Routes protégées par le guard `RolesGuard` + rôle `ADMIN`. Accessible uniquement avec un JWT appartenant à un utilisateur `ADMIN`.
-
-Fonctionnalités : gestion des zones, modération des adresses signalées, validation des contributions terrain, supervision du référentiel, création et révocation de clés API. Les opérations métier (désactivation d'adresse, recalcul de score) sont déléguées aux services existants (`AddressesService`, `ApiKeysService`) — l'AdminModule ne porte pas de logique dupliquée.
-
-### ContributionsModule
-
-Responsabilités : réception des contributions terrain soumises par les visiteurs, et exposition des endpoints admin pour les valider ou les rejeter.
-
-Une contribution approuvée est intégrée aux instructions de l'adresse concernée (`steps` et `assembledText` recalculé). Une contribution rejetée est marquée `REJECTED` et n'affecte pas l'adresse.
+Responsabilités : enregistrement des départs de navigation, confirmation d'arrivée, remontée de données intégrateurs.
 
 ### NotificationsModule
 
-Responsabilités : gestion des souscriptions push des habitants et envoi des notifications via l'API Web Push standard (bibliothèque `web-push`).
+Responsabilités : stockage en base des notifications (historique consultable dans l'app), envoi push via `web-push`.
 
-La bibliothèque `web-push` est installée via `npm install web-push`. Les clés VAPID sont générées une seule fois (`npx web-push generate-vapid-keys`) et stockées dans les variables d'environnement.
+`NotificationsService` expose `notify(userId, type, message, data?)` qui :
 
-**Deux déclencheurs de notification**, tous deux gérés dans `NotificationsService.notifyOwner()` :
+1. Crée un enregistrement `Notification` en base.
+2. Tente l'envoi push sur toutes les `PushSubscription` de l'utilisateur (best-effort, `Promise.allSettled`).
+3. Purge automatiquement les souscriptions expirées (erreur 410 de l'endpoint push).
 
-- **Seuil intermédiaire** : déclenché depuis `AddressesService` quand le score de fiabilité persisté d'une adresse passe sous 40 après mise à jour. Message : `"Votre adresse ${code} a reçu des retours négatifs. Vérifiez que les informations sont à jour."`.
-- **Désactivation administrative** : déclenché depuis `AdminModule` lors d'une désactivation par l'admin. Message : `"Votre adresse ${code} a été désactivée par un administrateur."`.
+Ce service est appelé depuis `AddressesService`, `ModerationService`, `PropositionsService` et `AdminService`. Jamais directement depuis un controller.
+
+### UploadModule
+
+Responsabilités : génération de signature Cloudinary côté serveur. Aucune manipulation de données binaires.
 
 ---
 
 ## 6. Authentification
 
-### Flux OTP
+### Flux inscription Habitant
 
 ```
-Frontend                         Backend                        Africa's Talking
-   |                                |                                  |
-   |-- POST /auth/request-otp ----->|                                  |
-   |   { phone: "+22960000000" }    |-- invalide OTPs précédents       |
-   |                                |-- SMS API (OTP 6 chiffres) ----->|
-   |                                |<- confirmation envoi ------------|
-   |<-- 200 { message: "OTP sent" } |                                  |
-   |                                |                                  |
-   |-- POST /auth/verify-otp ------>|                                  |
-   |   { phone, code }              |                                  |
-   |                                |-- findFirst OtpCode by phone     |
-   |<-- 200 { accessToken: "..." } -|                                  |
+Frontend                              Backend                        Africa's Talking
+   |                                     |                                |
+   |-- POST /auth/register ------------->|                                |
+   |   { phone, password, firstName? }   |                                |
+   |                                     |-- hash password (bcrypt)       |
+   |                                     |-- crée User (isPhoneVerified=false)
+   |                                     |-- génère OTP 6 chiffres        |
+   |                                     |-- SMS API ---------------------->
+   |<-- 200 { message: "OTP envoyé" } ---|                                |
+   |                                     |                                |
+   |-- POST /auth/verify-otp ----------->|                                |
+   |   { phone, code }                   |                                |
+   |                                     |-- vérifie OtpCode              |
+   |                                     |-- isPhoneVerified = true       |
+   |<-- 200 { accessToken } -------------|                                |
+```
+
+### Flux connexion Habitant
+
+```
+POST /auth/login
+Body: { phone, password }
+
+→ vérifie phone en base
+→ compare password avec passwordHash (bcrypt.compare)
+→ vérifie isPhoneVerified = true
+→ retourne JWT { sub, role }
+```
+
+### Flux connexion Modérateur / Admin
+
+```
+POST /auth/admin/login
+Body: { email, password }
+
+→ vérifie email en base, rôle MODERATOR ou ADMIN
+→ compare password avec passwordHash
+→ retourne JWT { sub, role }
+```
+
+### Flux changement de numéro Habitant
+
+```
+POST /auth/request-otp (JWT requis)
+→ OTP envoyé au nouveau numéro (fourni dans le body)
+
+POST /auth/verify-otp
+Body: { phone: newPhone, code, purpose: "PHONE_CHANGE" }
+→ met à jour User.phone
+→ invalide toutes les sessions actives (JWT précédents expireront naturellement)
 ```
 
 ### JWT
 
-- Payload minimal : `{ sub: userId, phone, role }`.
+- Payload : `{ sub: userId, role, iat, exp }`.
 - Expiration : 7 jours. Pas de refresh token pour le prototype.
-- Tout endpoint qui modifie des données (création, modification, désactivation d'adresse) requiert un JWT valide via `JwtAuthGuard`.
+- `JwtAuthGuard` : valide la signature et l'expiration.
+- `RolesGuard` : vérifie `user.role` via le décorateur `@Roles(Role.MODERATOR, Role.ADMIN)`. Vérifie également `user.suspendedAt` pour les mutations.
 
 ### Garde API Key
 
-Les endpoints `/api/v1/addresses/:code/resolve`, `/verify`, `/eta`, `POST /visits/confirm`, `GET /zones/:id/analytics` requièrent le header `Authorization: Bearer bj_live_[16car]`. La garde `ApiKeyGuard` valide la clé en base, vérifie son statut `ACTIVE` et son expiration si présente.
+Les endpoints tiers (`/resolve`, `/verify`, `/eta`, `POST /visits/confirm`, `GET /zones/:id/analytics`) requièrent le header `Authorization: Bearer bj_live_[16car]`. `ApiKeyGuard` valide la clé en base, vérifie `ACTIVE` et expiration.
 
-**Comportement en cas de clé révoquée** : HTTP 401 avec corps `{ "code": "API_KEY_REVOKED" }`.
+**Clé révoquée** : HTTP 401 `{ "code": "API_KEY_REVOKED" }`.
 
 ---
 
 ## 7. Gestion des clés API
 
-**Format** : `bj_live_` suivi de 16 caractères alphanumériques générés aléatoirement (base 62 pour maximiser l'entropie).
+Format : `bj_live_` + 16 caractères alphanumériques base62. Stockée en clair (pas une donnée sensible équivalente à un mot de passe).
 
-**Génération** : côté backend uniquement, par l'administrateur. La clé est stockée en clair dans la colonne `key` — ce ne sont pas des données sensibles équivalentes à un mot de passe. Elle est identifiable dans les logs par son préfixe `bj_live_` sans exposer le reste.
-
-**Quota analytique** : l'accès à `GET /zones/:id/analytics` est conditionné à un ratio de remontée ≥ 80% sur 30 jours glissants. Ce ratio est calculé à la demande, pas stocké.
-
-Implémentation du calcul :
-
-```sql
--- Visites totales soumises par cet intégrateur sur 30 jours
-SELECT COUNT(*) FROM "Visit"
-WHERE "apiKeyId" = $1
-  AND "source" = 'API'
-  AND "createdAt" >= NOW() - INTERVAL '30 days'
-
--- Visites confirmées (arrivedAt non null)
-SELECT COUNT(*) FROM "Visit"
-WHERE "apiKeyId" = $1
-  AND "source" = 'API'
-  AND "arrivedAt" IS NOT NULL
-  AND "createdAt" >= NOW() - INTERVAL '30 days'
-
--- Ratio = confirmedVisits / totalVisits
-```
-
-Le filtre `apiKeyId = $1` est indispensable : le ratio ne porte que sur les trajets soumis par la clé concernée, pas sur l'ensemble du système. L'index `@@index([apiKeyId])` sur `Visit` garantit la performance de cette requête.
-
-Si `totalVisits = 0` (aucun trajet soumis), l'accès est suspendu par défaut avec le message `"Aucune donnée remontée sur 30 jours."`.
+**Quota analytique** : `GET /zones/:id/analytics` conditionné à un ratio `visits/confirm` ≥ 80 % sur 30 jours glissants par clé. Calculé à la demande : `confirmedVisits / totalVisits` sur `Visit` WHERE `createdAt >= NOW() - INTERVAL '30 days' AND apiKeyId = $1`.
 
 ---
 
 ## 8. Upload photos — Cloudinary
 
-### Flux choisi : upload direct depuis le frontend (signature backend)
+### Flux : upload direct depuis le frontend (signature backend)
 
-Le backend ne manipule jamais de données binaires. Il génère une signature sécurisée que le frontend utilise pour uploader directement vers Cloudinary.
-
-```
-Frontend                              Backend                    Cloudinary
-   |                                     |                           |
-   |-- POST /upload/signature ---------->|                           |
-   |   Header: Authorization Bearer JWT  |                           |
-   |                                     |-- génère signature HMAC   |
-   |<-- 200 { signature, timestamp,      |                           |
-   |          apiKey, cloudName,         |                           |
-   |          folder, transformation } --|                           |
-   |                                     |                           |
-   |-- POST (direct Cloudinary) -------->|                           |
-   |   FormData: { file, signature,      |                           |
-   |   timestamp, api_key, folder,       |                           |
-   |   transformation: "q_auto,f_auto" } |                           |
-   |<----------------------------------------------- { secure_url } |
-   |                                     |                           |
-   |-- POST /addresses (création) ------>|                           |
-   |   { ..., photoUrl: secure_url }     |                           |
-```
-
-### Paramètres de signature
+Le backend génère une signature sécurisée. Le frontend uploade directement vers Cloudinary. Le backend ne manipule jamais de données binaires.
 
 ```typescript
 // upload.service.ts
@@ -680,7 +917,7 @@ const signature = cloudinary.utils.api_sign_request(
 );
 ```
 
-La transformation `q_auto,f_auto` est appliquée à l'upload, réduisant le poids moyen de ~500 Ko à ~80–120 Ko sans perte visuelle perceptible.
+La transformation `q_auto,f_auto` réduit le poids moyen de ~500 Ko à ~80–120 Ko.
 
 ---
 
@@ -690,50 +927,616 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
 
 ### Vue d'ensemble
 
-| Méthode | Route | Auth | Description |
-|---------|-------|------|-------------|
-| POST | `/auth/request-otp` | Public | Demande d'OTP SMS |
-| POST | `/auth/verify-otp` | Public | Vérification OTP → JWT |
-| POST | `/upload/signature` | JWT | Signature Cloudinary |
-| POST | `/addresses` | JWT | Création d'adresse |
-| PATCH | `/addresses/:code` | JWT (propriétaire) | Modification adresse |
-| DELETE | `/addresses/:code` | JWT (propriétaire) | Désactivation adresse |
-| GET | `/addresses/:code` | Public | Page publique (visiteur) |
-| GET | `/addresses/:code/resolve` | API Key | Résolution complète |
-| GET | `/addresses/:code/verify` | API Key | Score de fiabilité |
-| GET | `/addresses/:code/eta` | API Key | Estimation ETA statistique |
-| POST | `/addresses/:code/rate` | Public | Évaluation visiteur |
-| POST | `/addresses/:code/report` | Public | Signalement visiteur |
-| POST | `/visits/confirm` | API Key | Remontée données intégrateur |
-| GET | `/zones` | Public | Liste des zones actives |
-| GET | `/zones/:id/analytics` | API Key + quota | Analytics de zone |
-| POST | `/admin/zones` | JWT Admin | Création zone manuelle |
-| PATCH | `/admin/zones/:id` | JWT Admin | Modification zone |
-| GET | `/admin/addresses` | JWT Admin | Supervision référentiel (recherche + filtres) |
-| GET | `/admin/reports` | JWT Admin | Liste signalements |
-| PATCH | `/admin/reports/:id/resolve` | JWT Admin | Marquer signalement résolu |
-| PATCH | `/admin/addresses/:code/deactivate` | JWT Admin | Désactivation admin |
-| POST | `/admin/api-keys` | JWT Admin | Création clé API |
-| DELETE | `/admin/api-keys/:id` | JWT Admin | Révocation clé API |
-| GET | `/admin/contributions` | JWT Admin | Liste contributions en attente |
-| PATCH | `/admin/contributions/:id/approve` | JWT Admin | Publier une contribution |
-| PATCH | `/admin/contributions/:id/reject` | JWT Admin | Rejeter une contribution |
-| POST | `/notifications/subscribe` | JWT | Enregistrer endpoint push |
-| DELETE | `/notifications/unsubscribe` | JWT | Se désinscrire des notifications push |
-| DELETE | `/auth/account` | JWT | Suppression de compte + purge données |
+|
+ Méthode 
+|
+ Route 
+|
+ Auth 
+|
+ Description 
+|
+|
+---------
+|
+-------
+|
+------
+|
+-------------
+|
+|
+ POST 
+|
+`/auth/register`
+|
+ Public 
+|
+ Inscription Habitant 
+|
+|
+ POST 
+|
+`/auth/verify-otp`
+|
+ Public 
+|
+ Vérification OTP inscription ou changement de numéro 
+|
+|
+ POST 
+|
+`/auth/login`
+|
+ Public 
+|
+ Connexion Habitant (phone + password) 
+|
+|
+ POST 
+|
+`/auth/admin/login`
+|
+ Public 
+|
+ Connexion Modérateur/Admin (email + password) 
+|
+|
+ POST 
+|
+`/auth/request-otp`
+|
+ JWT 
+|
+ Demande OTP pour changement de numéro 
+|
+|
+ POST 
+|
+`/auth/forgot-password`
+|
+ Public 
+|
+ Reset mdp Modérateur/Admin 
+|
+|
+ POST 
+|
+`/auth/reset-password`
+|
+ Public 
+|
+ Confirm reset mdp 
+|
+|
+ DELETE 
+|
+`/auth/account`
+|
+ JWT 
+|
+ Suppression compte Habitant 
+|
+|
+ POST 
+|
+`/upload/signature`
+|
+ JWT 
+|
+ Signature Cloudinary 
+|
+|
+ POST 
+|
+`/addresses`
+|
+ JWT 
+|
+ Création d'adresse (DRAFT ou soumission directe) 
+|
+|
+ POST 
+|
+`/addresses/:code/submit`
+|
+ JWT (propriétaire) 
+|
+ Soumettre brouillon en PENDING_VALIDATION 
+|
+|
+ PATCH 
+|
+`/addresses/:code`
+|
+ JWT (propriétaire) 
+|
+ Modification → re-validation 
+|
+|
+ DELETE 
+|
+`/addresses/:code`
+|
+ JWT (propriétaire) 
+|
+ Désactivation par le propriétaire 
+|
+|
+ GET 
+|
+`/addresses/:code`
+|
+ Public 
+|
+ Consultation publique (version publiée) 
+|
+|
+ GET 
+|
+`/addresses/mine`
+|
+ JWT 
+|
+ Liste des adresses du propriétaire 
+|
+|
+ GET 
+|
+`/addresses/:code/resolve`
+|
+ API Key 
+|
+ Résolution complète 
+|
+|
+ GET 
+|
+`/addresses/:code/verify`
+|
+ API Key 
+|
+ Score de fiabilité (moyenne/5 + comptage) 
+|
+|
+ GET 
+|
+`/addresses/:code/eta`
+|
+ API Key 
+|
+ Estimation ETA 
+|
+|
+ POST 
+|
+`/addresses/:code/ratings`
+|
+ JWT 
+|
+ Évaluer une adresse (1–5 étoiles) 
+|
+|
+ PATCH 
+|
+`/addresses/:code/ratings`
+|
+ JWT 
+|
+ Modifier son évaluation 
+|
+|
+ DELETE 
+|
+`/addresses/:code/ratings`
+|
+ JWT 
+|
+ Supprimer son évaluation 
+|
+|
+ POST 
+|
+`/addresses/:code/reports`
+|
+ JWT 
+|
+ Signaler un problème 
+|
+|
+ POST 
+|
+`/addresses/:code/contributions`
+|
+ JWT 
+|
+ Contribuer terrain (texte libre) 
+|
+|
+ POST 
+|
+`/addresses/:code/rattachements`
+|
+ JWT 
+|
+ Se rattacher à une adresse 
+|
+|
+ DELETE 
+|
+`/addresses/:code/rattachements`
+|
+ JWT 
+|
+ Se détacher 
+|
+|
+ POST 
+|
+`/addresses/:code/propositions`
+|
+ JWT (rattaché) 
+|
+ Proposer une modification 
+|
+|
+ PATCH 
+|
+`/addresses/:code/propositions/:id/integrate`
+|
+ JWT (propriétaire) 
+|
+ Intégrer une proposition 
+|
+|
+ PATCH 
+|
+`/addresses/:code/propositions/:id/decline`
+|
+ JWT (propriétaire) 
+|
+ Décliner une proposition 
+|
+|
+ POST 
+|
+`/visits/confirm`
+|
+ API Key 
+|
+ Remontée données intégrateur 
+|
+|
+ GET 
+|
+`/zones`
+|
+ Public 
+|
+ Liste des zones actives 
+|
+|
+ GET 
+|
+`/zones/:id/analytics`
+|
+ API Key + quota 
+|
+ Analytics de zone 
+|
+|
+ GET 
+|
+`/notifications`
+|
+ JWT 
+|
+ Historique des notifications 
+|
+|
+ PATCH 
+|
+`/notifications/:id/read`
+|
+ JWT 
+|
+ Marquer notification comme lue 
+|
+|
+ PATCH 
+|
+`/notifications/read-all`
+|
+ JWT 
+|
+ Tout marquer comme lu 
+|
+|
+ POST 
+|
+`/notifications/subscribe`
+|
+ JWT 
+|
+ Enregistrer endpoint push 
+|
+|
+ DELETE 
+|
+`/notifications/unsubscribe`
+|
+ JWT 
+|
+ Se désinscrire des notifications push 
+|
+|
+ GET 
+|
+`/moderation/addresses`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Adresses en attente de validation 
+|
+|
+ PATCH 
+|
+`/moderation/addresses/:code/approve`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Valider adresse 
+|
+|
+ PATCH 
+|
+`/moderation/addresses/:code/reject`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Rejeter adresse (motif obligatoire) 
+|
+|
+ GET 
+|
+`/moderation/reports`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Signalements en attente 
+|
+|
+ PATCH 
+|
+`/moderation/reports/:id/resolve`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Marquer signalement résolu 
+|
+|
+ PATCH 
+|
+`/moderation/reports/:id/deactivate`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Désactiver adresse signalée 
+|
+|
+ PATCH 
+|
+`/moderation/reports/:id/ignore`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Ignorer signalement 
+|
+|
+ GET 
+|
+`/moderation/contributions`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Contributions terrain en attente 
+|
+|
+ PATCH 
+|
+`/moderation/contributions/:id/approve`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Publier contribution 
+|
+|
+ PATCH 
+|
+`/moderation/contributions/:id/reject`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Rejeter contribution 
+|
+|
+ GET 
+|
+`/moderation/propositions`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Propositions contributeurs en attente 
+|
+|
+ PATCH 
+|
+`/moderation/propositions/:id/approve`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Approuver proposition (→ notif owner) 
+|
+|
+ PATCH 
+|
+`/moderation/propositions/:id/reject`
+|
+ JWT MODERATOR\|ADMIN 
+|
+ Rejeter proposition 
+|
+|
+ GET 
+|
+`/admin/zones`
+|
+ JWT ADMIN 
+|
+ Liste zones (admin) 
+|
+|
+ POST 
+|
+`/admin/zones`
+|
+ JWT ADMIN 
+|
+ Création zone manuelle 
+|
+|
+ PATCH 
+|
+`/admin/zones/:id`
+|
+ JWT ADMIN 
+|
+ Modification zone 
+|
+|
+ GET 
+|
+`/admin/addresses`
+|
+ JWT ADMIN 
+|
+ Supervision référentiel 
+|
+|
+ PATCH 
+|
+`/admin/addresses/:code/deactivate`
+|
+ JWT ADMIN 
+|
+ Désactivation admin 
+|
+|
+ GET 
+|
+`/admin/api-keys`
+|
+ JWT ADMIN 
+|
+ Liste clés API 
+|
+|
+ POST 
+|
+`/admin/api-keys`
+|
+ JWT ADMIN 
+|
+ Création clé API 
+|
+|
+ DELETE 
+|
+`/admin/api-keys/:id`
+|
+ JWT ADMIN 
+|
+ Révocation clé API 
+|
+|
+ POST 
+|
+`/admin/moderators`
+|
+ JWT ADMIN 
+|
+ Créer compte Modérateur 
+|
+|
+ GET 
+|
+`/admin/moderators`
+|
+ JWT ADMIN 
+|
+ Liste des Modérateurs 
+|
+|
+ PATCH 
+|
+`/admin/moderators/:id/deactivate`
+|
+ JWT ADMIN 
+|
+ Désactiver Modérateur 
+|
+|
+ PATCH 
+|
+`/admin/moderators/:id/reactivate`
+|
+ JWT ADMIN 
+|
+ Réactiver Modérateur 
+|
+|
+ PATCH 
+|
+`/admin/moderators/:id/reset-password`
+|
+ JWT ADMIN 
+|
+ Reset mdp Modérateur 
+|
+|
+ PATCH 
+|
+`/admin/habitants/:id/suspend`
+|
+ JWT ADMIN 
+|
+ Suspendre un Habitant 
+|
+|
+ PATCH 
+|
+`/admin/habitants/:id/unsuspend`
+|
+ JWT ADMIN 
+|
+ Lever une suspension 
+|
 
 ---
 
 ### Détail des endpoints critiques
 
-#### `POST /api/v1/auth/request-otp`
+#### `POST /api/v1/auth/register`
 
 ```typescript
 // Body
-{ "phone": "+22960000000" }
+{ "phone": "+22960000000", "password": "monMotDePasse123", "firstName": "Mouwafic" }
 
 // Réponse 200
 { "data": { "message": "OTP envoyé", "expiresIn": 300 } }
+
+// Erreur 409 — numéro déjà utilisé
+{ "statusCode": 409, "code": "PHONE_ALREADY_REGISTERED" }
 
 // Erreur 400 — format téléphone invalide
 { "statusCode": 400, "code": "INVALID_PHONE_FORMAT" }
@@ -743,122 +1546,206 @@ Tous les endpoints sont préfixés `/api/v1/`. Le Swagger est disponible sur `/a
 
 ```typescript
 // Body
-{ "phone": "+22960000000", "code": "847291" }
+{ "phone": "+22960000000", "code": "847291", "purpose": "REGISTRATION" | "PHONE_CHANGE" }
+
+// Réponse 200 — inscription
+{ "data": { "accessToken": "eyJ..." } }
+
+// Réponse 200 — changement de numéro
+{ "data": { "message": "Numéro mis à jour" } }
+
+// Erreur 401
+{ "statusCode": 401, "code": "INVALID_OR_EXPIRED_OTP" }
+```
+
+#### `POST /api/v1/auth/login`
+
+```typescript
+// Body
+{ "phone": "+22960000000", "password": "monMotDePasse123" }
 
 // Réponse 200
-{ "data": { "accessToken": "eyJ...", "user": { "id": "...", "phone": "+22960000000" } } }
+{ "data": { "accessToken": "eyJ..." } }
 
-// Erreur 401 — OTP invalide ou expiré
-{ "statusCode": 401, "code": "INVALID_OR_EXPIRED_OTP" }
+// Erreur 401
+{ "statusCode": 401, "code": "INVALID_CREDENTIALS" }
+
+// Erreur 403 — numéro non vérifié (OTP non confirmé)
+{ "statusCode": 403, "code": "PHONE_NOT_VERIFIED" }
 ```
 
 #### `POST /api/v1/addresses`
 
 ```typescript
-// Header: Authorization: Bearer <JWT>
+// Header: Authorization: Bearer 
 // Body
 {
   "zoneId": "zone_cuid",
-  "steps": [
-    "Partir du marché Dantokpa",
-    "Prendre la 2ème rue à droite",
-    "Portail bleu avec étoile jaune",
-    "Entrée côté nord"
-  ],
+  "steps": ["Partir du marché Dantokpa", "2ème rue à droite", "Portail bleu"],
   "gpsLat": 6.3676,
   "gpsLng": 2.4252,
-  "photoUrl": "https://res.cloudinary.com/adressebj/image/upload/q_auto,f_auto/adressebj/portals/xyz.jpg"
+  "photoUrl": "https://res.cloudinary.com/...",
+  "submitNow": true   // false → DRAFT, true → PENDING_VALIDATION
 }
 
 // Réponse 201
 {
   "data": {
     "code": "AKP-7X3K",
-    "assembledText": "Partir du marché Dantokpa. Prendre la 2ème rue à droite. Portail bleu avec étoile jaune. Entrée côté nord.",
-    "shareUrl": "https://adressebj.vercel.app/a/AKP-7X3K",
-    "whatsappUrl": "https://wa.me/?text=Mon adresse AdresseBJ : AKP-7X3K → https://adressebj.vercel.app/a/AKP-7X3K"
+    "status": "PENDING_VALIDATION",
+    "assembledText": "Partir du marché Dantokpa. 2ème rue à droite. Portail bleu.",
+    "shareUrl": "https://adressebj.vercel.app/a/AKP-7X3K"
   }
 }
 
 // Erreur 400 — coordonnées hors périmètre
 { "statusCode": 400, "code": "COORDINATES_OUT_OF_COVERAGE" }
 
-// Erreur 400 — steps vides ou insuffisants
-{ "statusCode": 400, "code": "STEPS_REQUIRED", "message": "Au moins 2 étapes sont requises" }
+// Erreur 403 — compte suspendu
+{ "statusCode": 403, "code": "USER_SUSPENDED" }
 ```
 
-#### `GET /api/v1/addresses/:code` — Endpoint public visiteur
-
-Cet endpoint est appelé par le frontend sans clé API, y compris dans `generateMetadata` côté serveur pour les og:tags WhatsApp. Il expose toutes les données nécessaires à la page de consultation.
-
-Le masquage du score numérique est **appliqué côté backend** : le visiteur reçoit un badge qualitatif calculé par le serveur, pas le chiffre brut. Cette distinction protège contre l'inspection réseau par les créateurs cherchant à gamifier leur score.
+#### `POST /api/v1/addresses/:code/ratings`
 
 ```typescript
-// Public — pas d'auth, pas de clé API
+// Header: Authorization: Bearer 
+// Body
+{ "stars": 4 }  // 1 à 5
 
-// Réponse 200
+// Réponse 201 — première évaluation
+{ "data": { "recorded": true, "stars": 4 } }
+
+// Réponse 200 — évaluation mise à jour (PATCH /addresses/:code/ratings)
+{ "data": { "updated": true, "stars": 4 } }
+
+// Erreur 400 — stars hors plage
+{ "statusCode": 400, "code": "INVALID_STARS_VALUE", "message": "stars must be between 1 and 5" }
+
+// Erreur 401 — non authentifié
+{ "statusCode": 401, "code": "UNAUTHORIZED" }
+```
+
+#### `POST /api/v1/addresses/:code/reports`
+
+```typescript
+// Header: Authorization: Bearer 
+// Body
+{ "message": "Le portail n'existe plus à cet endroit." }  // optionnel
+
+// Réponse 201
+{ "data": { "reportId": "report_cuid", "status": "PENDING" } }
+
+// Erreur 401 — non authentifié
+{ "statusCode": 401, "code": "UNAUTHORIZED" }
+```
+
+#### `POST /api/v1/addresses/:code/rattachements`
+
+```typescript
+// Header: Authorization: Bearer 
+// Pas de body
+
+// Réponse 201
+{ "data": { "rattachementId": "ratt_cuid" } }
+
+// Erreur 409 — déjà rattaché
+{ "statusCode": 409, "code": "ALREADY_RATTACHED" }
+
+// Erreur 400 — impossible de se rattacher à sa propre adresse
+{ "statusCode": 400, "code": "CANNOT_ATTACH_OWN_ADDRESS" }
+
+// Erreur 400 — adresse non publiée
+{ "statusCode": 400, "code": "ADDRESS_NOT_PUBLISHED" }
+```
+
+#### `POST /api/v1/addresses/:code/propositions`
+
+```typescript
+// Header: Authorization: Bearer  — doit être un contributeur rattaché
+// Body
 {
-  "data": {
-    "code": "AKP-7X3K",
-    "zone": { "name": "Akpakpa", "prefix": "AKP" },
-    "gps": { "lat": 6.3676, "lng": 2.4252 },
-    "photoUrl": "https://res.cloudinary.com/...",
-    "steps": ["Partir du marché Dantokpa", "..."],
-    "assembledText": "Partir du marché Dantokpa. ...",
-    "reliabilityBadge": "green",  // "green" | "orange" | "red" | null
-    // null = pas encore évalué (aucune donnée)
-    // "green" ≥ 70, "orange" 40–69, "red" < 40
-    "visitCount": 23,
-    "isActive": true,
-    "createdAt": "2026-05-01T10:00:00Z"
+  "type": "PHOTO",        // "PHOTO" | "INSTRUCTIONS" | "GPS"
+  "proposedData": {
+    "photoUrl": "https://res.cloudinary.com/..."    // pour PHOTO
+    // ou "steps": ["étape 1", "étape 2"]           // pour INSTRUCTIONS
+    // ou { "gpsLat": 6.37, "gpsLng": 2.43 }        // pour GPS
   }
 }
 
-// Erreur 404
-{ "statusCode": 404, "code": "ADDRESS_NOT_FOUND" }
+// Réponse 201
+{ "data": { "propositionId": "prop_cuid", "status": "PENDING" } }
 
-// Erreur 410 — adresse désactivée (RFC 9110)
-{
-  "statusCode": 410,
-  "code": "ADDRESS_INACTIVE",
-  "message": "This address has been deactivated.",
-  "address_code": "AKP-7X3K",
-  "deactivated_at": "2026-03-14T10:22:00Z"
-}
+// Erreur 403 — n'est pas contributeur rattaché
+{ "statusCode": 403, "code": "NOT_RATTACHED" }
 ```
 
-Note : `reliabilityBadge` est `null` quand `address.reliabilityScore` est `null` — le frontend distingue "pas encore évalué" de "score mauvais" via cette valeur nulle, sans jamais voir le chiffre.
-
-#### `GET /api/v1/addresses/:code/resolve`
+#### `PATCH /api/v1/addresses/:code/propositions/:id/integrate`
 
 ```typescript
-// Header: Authorization: Bearer bj_live_xxxxxxxxxxxxxxxx
+// Header: Authorization: Bearer  — doit être le propriétaire de l'adresse
+// Pas de body
+
+// Effet : applique proposedData aux champs de l'adresse (selon type)
+//         status = OWNER_INTEGRATED, ownerDecidedAt = now()
+//         notification push + in-app au contributeur
 
 // Réponse 200
-{
-  "data": {
-    "code": "AKP-7X3K",
-    "zone": { "id": "...", "name": "Akpakpa", "prefix": "AKP" },
-    "gps": { "lat": 6.3676, "lng": 2.4252 },
-    "photoUrl": "https://res.cloudinary.com/...",
-    "steps": ["Partir du marché Dantokpa", "..."],
-    "assembledText": "Partir du marché Dantokpa. ...",
-    "isActive": true,
-    "createdAt": "2026-05-01T10:00:00Z"
-  }
-}
+{ "data": { "integrated": true } }
 
-// Erreur 404
-{ "statusCode": 404, "code": "ADDRESS_NOT_FOUND" }
+// Erreur 403 — n'est pas le propriétaire
+{ "statusCode": 403, "code": "NOT_ADDRESS_OWNER" }
 
-// Erreur 410 — adresse désactivée (RFC 9110)
-{
-  "statusCode": 410,
-  "code": "ADDRESS_INACTIVE",
-  "message": "This address has been deactivated.",
-  "address_code": "AKP-7X3K",
-  "deactivated_at": "2026-03-14T10:22:00Z"
-}
+// Erreur 400 — proposition non dans l'état MODERATOR_APPROVED
+{ "statusCode": 400, "code": "PROPOSITION_NOT_READY_FOR_OWNER" }
+```
+
+#### `PATCH /api/v1/moderation/addresses/:code/approve`
+
+```typescript
+// Header: Authorization: Bearer 
+// Pas de body
+
+// Effet :
+//   - Si status = PENDING_VALIDATION (création initiale) : status = PUBLISHED
+//   - Si status = PENDING_VALIDATION (re-validation) : applique pendingUpdate → champs principaux, pendingUpdate = null, status = PUBLISHED
+// Notification au propriétaire (ADDRESS_VALIDATED)
+
+// Réponse 200
+{ "data": { "code": "AKP-7X3K", "status": "PUBLISHED" } }
+```
+
+#### `PATCH /api/v1/moderation/addresses/:code/reject`
+
+```typescript
+// Header: Authorization: Bearer 
+// Body — motif obligatoire
+{ "reason": "Photo non conforme : image floue, portail non visible." }
+
+// Effet :
+//   - status = REJECTED (création initiale)
+//   - ou status = PUBLISHED + pendingUpdate = null (re-validation rejetée : version précédente reste active)
+// Notification au propriétaire (ADDRESS_REJECTED, data.reason)
+// rejectionReason stocké sur l'adresse
+
+// Réponse 200
+{ "data": { "code": "AKP-7X3K", "status": "REJECTED" } }
+
+// Erreur 400 — motif manquant
+{ "statusCode": 400, "code": "REJECTION_REASON_REQUIRED" }
+```
+
+#### `PATCH /api/v1/moderation/propositions/:id/approve`
+
+```typescript
+// Header: Authorization: Bearer 
+// Pas de body
+
+// Effet : status = MODERATOR_APPROVED
+//         Notification au propriétaire (PROPOSITION_MODERATOR_APPROVED)
+//         Le propriétaire peut maintenant intégrer ou décliner
+
+// Réponse 200
+{ "data": { "propositionId": "...", "status": "MODERATOR_APPROVED" } }
 ```
 
 #### `GET /api/v1/addresses/:code/verify`
@@ -870,270 +1757,69 @@ Note : `reliabilityBadge` est `null` quand `address.reliabilityScore` est `null`
 {
   "data": {
     "code": "AKP-7X3K",
-    "reliabilityScore": 87,  // 0-100, chiffre brut — réservé aux intégrateurs via API Key
-    "visitCount": 23,
+    "averageRating": 3.7,    // sur 5, arrondi au dixième — null si aucune évaluation
+    "ratingCount": 14,
     "isActive": true
   }
 }
 ```
 
-#### `GET /api/v1/addresses/:code/eta`
-
-L'ETA est une estimation **purement statistique** basée sur la médiane des durées de trajets confirmés vers cette adresse. Il ne s'agit pas d'un calcul de routage depuis une position — OSRM est délégué au frontend pour la navigation en temps réel. Aucun paramètre de position n'est accepté sur cet endpoint.
+#### `GET /api/v1/addresses/:code`
 
 ```typescript
-// Header: Authorization: Bearer bj_live_...
-// Pas de query params
-
-// Réponse 200 — données disponibles
-{
-  "data": {
-    "estimatedMinutes": 12,
-    "confidence": "medium",   // "low" | "medium" | "high"
-    "basedOnVisits": 8
-  }
-}
-
-// Réponse 200 — données insuffisantes au lancement
-{
-  "data": {
-    "estimatedMinutes": null,
-    "confidence": "none",
-    "basedOnVisits": 0,
-    "message": "Données insuffisantes. L'ETA sera disponible après accumulation de trajets."
-  }
-}
-```
-
-Niveaux de confiance : `"low"` si `basedOnVisits < 5`, `"medium"` si `< 20`, `"high"` si `≥ 20`.
-
-#### `POST /api/v1/visits/confirm`
-
-```typescript
-// Header: Authorization: Bearer bj_live_...
-// Body
-{
-  "addressCode": "AKP-7X3K",
-  "departAt": "2026-05-17T09:00:00Z",
-  "arrivedAt": "2026-05-17T09:14:00Z",
-  "finalPrice": 1500          // optionnel, en FCFA
-}
-
-// Réponse 201
-{ "data": { "visitId": "visit_cuid", "recorded": true } }
-
-// Erreur 400 — arrivedAt antérieur à departAt
-{ "statusCode": 400, "code": "INVALID_VISIT_TIMESTAMPS" }
-```
-
-#### `GET /api/v1/zones/:id/analytics`
-
-```typescript
-// Header: Authorization: Bearer bj_live_...
-// Vérifie ratio remontée >= 80% sur 30j glissants pour cette clé
+// Public
 
 // Réponse 200
 {
   "data": {
-    "zoneId": "...",
-    "zoneName": "Akpakpa",
-    "totalVisits": 142,
-    "medianEtaMinutes": 11,
-    "medianPriceFCFA": 1200,
-    "peakHours": ["08:00-09:00", "17:00-18:00"],
-    "successRate": 0.94,
-    "period": "last_30_days"
+    "code": "AKP-7X3K",
+    "zone": { "name": "Akpakpa", "prefix": "AKP" },
+    "gps": { "lat": 6.3676, "lng": 2.4252 },
+    "photoUrl": "https://res.cloudinary.com/...",
+    "steps": ["..."],
+    "assembledText": "...",
+    "averageRating": 3.7,   // null si aucune évaluation (affichage "Aucune évaluation" côté frontend)
+    "ratingCount": 14,
+    "isActive": true,
+    "createdAt": "2026-05-01T10:00:00Z"
   }
 }
-
-// Erreur 403 — quota insuffisant
-{
-  "statusCode": 403,
-  "code": "ANALYTICS_QUOTA_INSUFFICIENT",
-  "message": "Ratio de remontée insuffisant (67% < 80% requis sur 30 jours)."
-}
 ```
 
-#### `POST /api/v1/addresses/:code/rate`
+#### `GET /api/v1/notifications`
 
 ```typescript
-// Public — pas d'auth
-// Body
-{ "type": "CONFORM" }   // ou "NONCONFORM"
-// Header utilisé pour hash anti-abus : X-Forwarded-For + User-Agent
-
-// Réponse 201
-{ "data": { "recorded": true } }
-
-// Réponse 200 — déjà voté aujourd'hui (silencieux, pas d'erreur)
-{ "data": { "recorded": false, "reason": "ALREADY_VOTED_TODAY" } }
-```
-
-#### `POST /api/v1/addresses/:code/contribution`
-
-```typescript
-// Public — pas d'auth
-// Body
-{
-  "direction": "Sens unique nord-sud",             // optionnel
-  "entrySide": "Côté gauche en venant du marché"  // optionnel
-}
-// Au moins un des deux champs doit être présent
-
-// Réponse 201
-{ "data": { "contributionId": "contrib_cuid", "status": "PENDING" } }
-
-// Erreur 400 — aucun champ fourni
-{ "statusCode": 400, "code": "CONTRIBUTION_FIELDS_REQUIRED" }
-
-// Erreur 404 — adresse inconnue
-{ "statusCode": 404, "code": "ADDRESS_NOT_FOUND" }
-
-// Erreur 410 — adresse désactivée
-{ "statusCode": 410, "code": "ADDRESS_INACTIVE" }
-```
-
-#### `GET /api/v1/admin/addresses`
-
-```typescript
-// Header: Authorization: Bearer <JWT Admin>
-// Query params:
-//   ?search=AKP-7X3K        (recherche par code)
-//   ?search=+22960000000    (recherche par téléphone habitant)
-//   ?zone=zone_cuid
-//   ?status=active | inactive | reported
-//   ?page=1&limit=20
+// Header: Authorization: Bearer 
 
 // Réponse 200
 {
   "data": [
     {
-      "code": "AKP-7X3K",
-      "zone": { "name": "Akpakpa" },
-      "ownerPhone": "+229601****00",   // masqué partiellement
-      "isActive": true,
-      "reliabilityScore": 72,   // lu directement depuis le champ dénormalisé — zéro query additionnelle
-      "reportCount": 0,
-      "createdAt": "2026-05-01T10:00:00Z"
-    }
-  ],
-  "meta": {
-    "timestamp": "...",
-    "total": 142,
-    "page": 1,
-    "limit": 20
-  }
-}
-```
-
-#### `GET /api/v1/admin/contributions`
-
-```typescript
-// Header: Authorization: Bearer <JWT Admin>
-// Query params: ?status=PENDING (défaut) | APPROVED | REJECTED
-
-// Réponse 200
-{
-  "data": [
-    {
-      "id": "contrib_cuid",
-      "addressCode": "AKP-7X3K",
-      "direction": "Sens unique nord-sud",
-      "entrySide": "Côté gauche",
-      "status": "PENDING",
-      "createdAt": "2026-05-10T08:00:00Z",
-      "address": {
-        "photoUrl": "https://res.cloudinary.com/...",
-        "assembledText": "Partir du marché Dantokpa. ..."
-      }
+      "id": "notif_cuid",
+      "type": "ADDRESS_VALIDATED",
+      "message": "Votre adresse AKP-7X3K a été validée et publiée.",
+      "data": { "addressCode": "AKP-7X3K" },
+      "readAt": null,
+      "createdAt": "2026-05-17T10:00:00Z"
     }
   ]
 }
 ```
 
-#### `PATCH /api/v1/admin/contributions/:id/approve`
+#### `PATCH /api/v1/admin/habitants/:id/suspend`
 
 ```typescript
-// Header: Authorization: Bearer <JWT Admin>
-// Pas de body
-
-// Effet : status = APPROVED, reviewedAt = now()
-//         Les champs direction/entrySide approuvés sont ajoutés
-//         comme nouvelles étapes dans address.steps
-//         assembledText est recalculé automatiquement via buildAssembledText()
-
-// Réponse 200
-{ "data": { "contributionId": "...", "status": "APPROVED" } }
-```
-
-#### `PATCH /api/v1/admin/contributions/:id/reject`
-
-```typescript
-// Header: Authorization: Bearer <JWT Admin>
-// Pas de body
-
-// Effet : status = REJECTED, reviewedAt = now() — l'adresse n'est pas modifiée
-
-// Réponse 200
-{ "data": { "contributionId": "...", "status": "REJECTED" } }
-```
-
-#### `POST /api/v1/notifications/subscribe`
-
-```typescript
-// Header: Authorization: Bearer <JWT>
-// Body — shape standard de l'API Web Push
-{
-  "endpoint": "https://fcm.googleapis.com/fcm/send/...",
-  "keys": {
-    "p256dh": "...",
-    "auth": "..."
-  }
-}
-
-// Réponse 201
-{ "data": { "subscribed": true } }
-
-// Comportement : upsert si un PushSubscription existe déjà avec cet endpoint.
-```
-
-#### `DELETE /api/v1/notifications/unsubscribe`
-
-```typescript
-// Header: Authorization: Bearer <JWT>
+// Header: Authorization: Bearer 
 // Body
-{ "endpoint": "https://fcm.googleapis.com/fcm/send/..." }
+{ "reason": "Spam d'adresses fictives — 15 adresses en 24h." }
+
+// Effet : User.suspendedAt = now(), User.suspensionReason = reason
+//         Notification in-app + push (ACCOUNT_SUSPENDED)
+//         Les adresses restent publiquement accessibles
+//         Les rattachements et contributions futurs sont gelés
 
 // Réponse 200
-{ "data": { "unsubscribed": true } }
-
-// Si l'endpoint n'existe pas : 200 silencieux (idempotent)
-```
-
-#### `DELETE /api/v1/auth/account`
-
-```typescript
-// Header: Authorization: Bearer <JWT>
-// Body : { "phone": "+22960000000" }
-// Note : le body sur une requête DELETE est non-standard selon RFC 9110.
-// En pratique Express/NestJS le gère correctement, mais certains proxies
-// peuvent l'ignorer. Documenter cette limitation dans DEPLOYMENT.md.
-// Alternative en production : POST /auth/account/delete.
-
-// Comportement :
-// 1. Vérifie que phone correspond à l'utilisateur du JWT
-// 2. Désactive toutes les adresses de l'utilisateur (isActive = false)
-// 3. Efface les données personnelles : phone → "[supprimé-{userId}]", email → null
-// 4. Révoque tous les OTP actifs (used = true)
-// 5. Supprime toutes les PushSubscriptions
-// 6. Les visites, ratings et contributions sont conservés anonymisés
-
-// Réponse 200
-{ "data": { "deleted": true, "purgeScheduledAt": "2026-06-16T00:00:00Z" } }
-// purgeScheduledAt = now() + 30 jours (conformité loi n°2017-20)
-
-// Erreur 400 — téléphone ne correspond pas
-{ "statusCode": 400, "code": "PHONE_MISMATCH" }
+{ "data": { "userId": "...", "suspendedAt": "2026-05-17T..." } }
 ```
 
 ---
@@ -1142,10 +1828,9 @@ Niveaux de confiance : `"low"` si `basedOnVisits < 5`, `"medium"` si `< 20`, `"h
 
 ### Génération de code adresse
 
-Le code suit le format `[PRÉFIXE-ZONE]-[SÉQUENCE-4CAR]`. La séquence est en base 32, alphabet épuré : `23456789ABCDEFGHJKMNPQRSTVWXYZ` (0, O, I, L exclus pour éviter les confusions visuelles et orales).
+Le code suit le format `[PRÉFIXE-ZONE]-[SÉQUENCE-4CAR]`. Alphabet base32 épuré : `23456789ABCDEFGHJKMNPQRSTVWXYZ` (O, 0, I, L exclus).
 
 ```typescript
-// addresses.service.ts
 private readonly ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 private generateSequence(): string {
@@ -1156,346 +1841,522 @@ private generateSequence(): string {
   return result;
 }
 
-async generateUniqueCode(zonePrefix: string): Promise<string> {
-  // Le pattern check-then-insert présente une race condition théorique :
-  // deux requêtes simultanées peuvent générer le même code, vérifier
-  // qu'il est libre, et la seconde échouer sur la contrainte @unique.
-  // On laisse la contrainte DB faire son travail et on gère P2002 avec retry.
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const code = `${zonePrefix}-${this.generateSequence()}`;
-    const exists = await this.prisma.address.findUnique({ where: { code } });
-    if (!exists) return code;
-    // Collision détectée (probabilité ~1/million par zone) → retry
-  }
-  throw new Error('CODE_GENERATION_EXHAUSTED');
+async generateUniqueCode(zonePrefix: string): Promise {
+  let code: string;
+  let attempts = 0;
+  do {
+    if (attempts > 50) throw new Error('CODE_GENERATION_EXHAUSTED');
+    code = `${zonePrefix}-${this.generateSequence()}`;
+    attempts++;
+  } while (await this.prisma.address.findUnique({ where: { code } }));
+  return code;
 }
 ```
 
-À l'insertion en base, si une collision survient malgré la vérification (race condition dans une fenêtre de quelques millisecondes), Prisma lève une `PrismaClientKnownRequestError` avec code `P2002`. Le service appelant doit attraper cette erreur et relancer `generateUniqueCode` — ce comportement est documenté dans les tests.
-
-**Garantie de non-collision** : pool de 32⁴ = 1 048 576 combinaisons par zone. Zéro risque de saturation au stade prototype.
-
-**Permanence** : un code ne change jamais après création. Les migrations de zones ne réattribuent jamais un code existant.
+**Permanence** : un code ne change jamais, même si l'adresse est modifiée, désactivée ou si des zones sont restructurées.
 
 ### Assemblage du texte d'instructions
 
 ```typescript
 buildAssembledText(steps: string[]): string {
-  return steps
-    .map(s => s.trim().replace(/\.+$/, ''))  // supprime la ponctuation finale éventuelle
-    .filter(s => s.length > 0)               // élimine les steps vides
-    .join('. ') + '.';
+  return steps.map(s => s.trim()).join('. ') + '.';
 }
 ```
-
-Sans le `replace(/\.+$/, '')`, une étape saisie avec un point final (`"Partir du marché Dantokpa."`) produit `"Partir du marché Dantokpa.. Prendre la 2ème rue"` — double ponctuation silencieuse. Le `filter` évite un step vide qui produirait `"Prendre la rue. . Portail bleu"`.
 
 L'`assembledText` est recalculé automatiquement à chaque modification des `steps`. Il n'est jamais saisi directement.
 
-### Score de fiabilité — calcul et persistance
+### Calcul du score de fiabilité
 
-Le score est un entier entre 0 et 100, **persisté sur le modèle `Address`** (`reliabilityScore Int?`). Il est mis à jour après chaque événement qui l'affecte (vote visiteur ou remontée intégrateur). Il n'est **pas** recalculé à la demande — ce pattern produirait des requêtes N+1 sur `GET /admin/addresses` qui charge 20 adresses avec leur score.
+Le score est la moyenne des étoiles attribuées par les Habitants authentifiés, arrondie au dixième.
 
 ```typescript
-// addresses.service.ts
-async refreshReliabilityScore(addressId: string): Promise<void> {
-  const [ratings, visits] = await Promise.all([
-    this.prisma.rating.findMany({ where: { addressId } }),
-    this.prisma.visit.findMany({
-      where: { addressId, arrivedAt: { not: null } },
-    }),
-  ]);
-
-  // Aucune donnée des deux canaux → score null (pas encore évalué)
-  if (ratings.length === 0 && visits.length === 0) {
-    await this.prisma.address.update({
-      where: { id: addressId },
-      data: { reliabilityScore: null },
-    });
-    return;
-  }
-
-  let ratingScore: number;
-  if (ratings.length > 0) {
-    const conformCount = ratings.filter(r => r.type === 'CONFORM').length;
-    ratingScore = (conformCount / ratings.length) * 100;
-  } else {
-    // Visites confirmées mais aucun vote : le canal évaluation est neutre (50).
-    // Ce comportement est intentionnel et documenté : une adresse fréquentée
-    // mais non évaluée n'est pas pénalisée, mais elle n'obtient pas non plus
-    // le bonus évaluation maximal. Score résultant avec 20 visites et 0 vote :
-    // 50 * 0.6 + 100 * 0.4 = 70 — comportement attendu et acceptable.
-    ratingScore = 50;
-  }
-
-  const visitScore = Math.min(visits.length * 5, 100);
-  const newScore = Math.round(ratingScore * 0.6 + visitScore * 0.4);
-
-  await this.prisma.address.update({
-    where: { id: addressId },
-    data: { reliabilityScore: newScore },
+async computeAverageRating(addressId: string): Promise {
+  const ratings = await this.prisma.rating.findMany({
+    where: { addressId },
+    select: { stars: true },
   });
 
-  // Déclencher notification si le score franchit le seuil à la baisse
-  const address = await this.prisma.address.findUnique({
-    where: { id: addressId },
-    select: { reliabilityScore: true, userId: true, code: true },
-  });
-
-  if (address && address.reliabilityScore !== null) {
-    const previousScore = address.reliabilityScore;
-    if (newScore < 40 && previousScore >= 40) {
-      await this.notificationsService.notifyOwner(address.userId, {
-        message: `Votre adresse ${address.code} a reçu des retours négatifs. Vérifiez que les informations sont à jour.`,
-        url: `/dashboard/address/${address.code}/edit`,
-      });
-    }
+  if (ratings.length === 0) {
+    return { averageRating: null, ratingCount: 0 };
   }
+
+  const sum = ratings.reduce((acc, r) => acc + r.stars, 0);
+  const avg = Math.round((sum / ratings.length) * 10) / 10;
+  return { averageRating: avg, ratingCount: ratings.length };
 }
 ```
 
-`refreshReliabilityScore` est appelé depuis :
-- `AddressesService.rateAddress()` — après enregistrement d'un vote visiteur
-- `VisitsService.confirmVisit()` — après enregistrement d'une remontée intégrateur
+**`null` signifie "aucune évaluation"** — différent d'un score de 0 qui serait un score légitimement mauvais.
 
-### Conversion score → badge (endpoint public)
+**Seuil de notification** : si `averageRating < 3.0` après une nouvelle évaluation ou modification, et que la valeur précédente était ≥ 3.0, déclencher `SCORE_DEGRADED`.
 
-```typescript
-// addresses.service.ts
-toReliabilityBadge(score: number | null): 'green' | 'orange' | 'red' | null {
-  if (score === null) return null;  // pas encore de données
-  if (score >= 70) return 'green';
-  if (score >= 40) return 'orange';
-  return 'red';
-}
+**Niveaux d'exposition** :
+
+|
+ Destinataire 
+|
+ Ce qu'il reçoit 
+|
+|
+---
+|
+---
+|
+|
+ Visiteur (page publique) 
+|
+`averageRating: N.N \| null`
+ + 
+`ratingCount`
+|
+|
+ Développeur tiers (API 
+`/verify`
+) 
+|
+`averageRating: N.N \| null`
+ + 
+`ratingCount`
+|
+|
+ Administrateur (dashboard) 
+|
+ Idem + historique des signalements 
+|
+
+### Machine à états des adresses
+
+```
+DRAFT ──────────────────────────────> PENDING_VALIDATION
+                  (submit)                    │
+                                    ┌─────────┴─────────┐
+                                    │                   │
+                                  approve             reject
+                                    │                   │
+                                    ▼                   ▼
+                                PUBLISHED           REJECTED ──> (corrige) ──> PENDING_VALIDATION
+                                    │
+                          ┌─────────┼──────────────────┐
+                          │         │                  │
+                        modify   deactivate       (signalement)
+                          │         │                  │
+                          ▼         ▼                  ▼
+                   PENDING_VALIDATION  DEACTIVATED   DEACTIVATED
+                 (pendingUpdate défini ;
+                 version publiée reste active)
 ```
 
-Cette conversion est appliquée **côté backend** avant de composer la réponse de `GET /addresses/:code` (public). Le chiffre brut `reliabilityScore` n'apparaît jamais dans cette réponse — uniquement dans `/verify` (API Key) et le dashboard admin.
+**Cas re-validation rejetée** : `status` retourne à `PUBLISHED`, `pendingUpdate` est effacé. La version précédente reste active.
 
-**Niveaux d'exposition du score** :
+### Gestion de la suspension Habitant
 
-| Destinataire | Ce qu'il reçoit |
-|---|---|
-| Visiteur (page publique) | `reliabilityBadge: "green" \| "orange" \| "red" \| null` — calculé côté backend |
-| Développeur tiers (API `/verify`) | `reliabilityScore: 0–100` + `visitCount` |
-| Administrateur (dashboard) | `reliabilityScore` + historique des signalements |
+Un Habitant suspendu peut :
+- Consulter les adresses publiques (accès lecture inchangé).
 
-### Anti-abus sur les votes visiteurs
+Un Habitant suspendu ne peut pas :
+- Créer, modifier ou désactiver une adresse.
+- Créer un rattachement.
+- Soumettre une contribution, un signalement, une évaluation.
+- Soumettre une proposition de modification.
 
-```typescript
-buildAbuseHash(ip: string, userAgent: string, code: string): string {
-  const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  const raw = `${ip}:${userAgent}:${code}:${date}`;
-  return crypto.createHash('sha256').update(raw).digest('hex');
-}
-```
+Implémentation : le `JwtAuthGuard` injecte le `User` complet. `RolesGuard` (ou un guard dédié `SuspensionGuard`) vérifie `user.suspendedAt` sur les routes de mutation.
 
-Le hash est non-réversible. Il sert uniquement de filtre anti-abus par jour et par adresse. Un vote avec un hash déjà présent en base pour aujourd'hui est silencieusement ignoré (`recorded: false, reason: "ALREADY_VOTED_TODAY"`).
-
-### Gestion des adresses désactivées
-
-Quand une adresse est désactivée (par son créateur ou par l'admin), `isActive = false` et `deactivatedAt = now()`. Le code n'est **jamais** réattribué.
-
-- Endpoint public `GET /addresses/:code` → message générique sans exposer les données.
-- Endpoints API (`/resolve`, `/verify`, `/eta`) → HTTP 410 avec corps structuré.
-- Endpoint contribution `POST /addresses/:code/contribution` → HTTP 410 (pas de contribution sur une adresse inactive).
-
-### Déclenchement des notifications push
+### Notifications push
 
 ```typescript
-// notifications.service.ts
-async notifyOwner(userId: string, payload: PushPayload): Promise<void> {
-  const subscriptions = await this.prisma.pushSubscription.findMany({
-    where: { userId },
+async notify(userId: string, type: NotificationType, message: string, data?: object): Promise {
+  // 1. Stocker en base (historique consultable)
+  await this.prisma.notification.create({
+    data: { userId, type, message, data },
   });
 
-  const message = JSON.stringify({
-    title: 'AdresseBJ',
-    body: payload.message,
-    data: { url: payload.url },
-  });
+  // 2. Envoi push best-effort
+  const subscriptions = await this.prisma.pushSubscription.findMany({ where: { userId } });
+  const payload = JSON.stringify({ title: 'AdresseBJ', body: message, data });
 
   await Promise.allSettled(
     subscriptions.map((sub) =>
-      webpush
-        .sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          message,
-        )
-        .catch(async (err) => {
-          // Endpoint expiré (410) → supprimer la souscription automatiquement
-          if (err.statusCode === 410) {
-            await this.prisma.pushSubscription.delete({ where: { id: sub.id } });
-          }
-        }),
-    ),
+      webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload,
+      ).catch(async (err) => {
+        if (err.statusCode === 410) {
+          await this.prisma.pushSubscription.delete({ where: { id: sub.id } });
+        }
+      })
+    )
   );
 }
 ```
 
-`Promise.allSettled` garantit qu'une souscription défaillante ne bloque pas les autres. Les notifications sont best-effort — leur échec ne doit **jamais** faire échouer l'opération principale (vote, désactivation).
+**Déclencheurs** :
+
+|
+ Événement 
+|
+ Destinataire 
+|
+ Type 
+|
+|
+-----------
+|
+-------------
+|
+------
+|
+|
+ Adresse validée 
+|
+ Propriétaire 
+|
+`ADDRESS_VALIDATED`
+|
+|
+ Adresse rejetée 
+|
+ Propriétaire 
+|
+`ADDRESS_REJECTED`
+|
+|
+ Score < 3.0 (quand il était ≥ 3.0) 
+|
+ Propriétaire 
+|
+`SCORE_DEGRADED`
+|
+|
+ Adresse désactivée par Mod/Admin 
+|
+ Propriétaire 
+|
+`ADDRESS_DEACTIVATED_BY_MODERATOR`
+|
+|
+ Adresse désactivée 
+|
+ Contributeurs rattachés 
+|
+`RATTACHMENT_ADDRESS_DEACTIVATED`
+|
+|
+ Proposition approuvée par Modérateur 
+|
+ Propriétaire 
+|
+`PROPOSITION_MODERATOR_APPROVED`
+|
+|
+ Proposition rejetée par Modérateur 
+|
+ Contributeur 
+|
+`PROPOSITION_MODERATOR_REJECTED`
+|
+|
+ Propriétaire intègre 
+|
+ Contributeur 
+|
+`PROPOSITION_OWNER_INTEGRATED`
+|
+|
+ Propriétaire décline 
+|
+ Contributeur 
+|
+`PROPOSITION_OWNER_DECLINED`
+|
+|
+ Compte suspendu 
+|
+ Habitant concerné 
+|
+`ACCOUNT_SUSPENDED`
+|
 
 ### Suppression de compte — logique de purge
 
-La suppression est en deux temps : anonymisation immédiate + purge physique planifiée à 30 jours.
-
 ```typescript
-// auth.service.ts
-async deleteAccount(userId: string): Promise<void> {
+async deleteAccount(userId: string): Promise {
   await this.prisma.$transaction([
-    // 1. Désactiver toutes les adresses
+    // Désactiver toutes les adresses → notifier les contributeurs rattachés
     this.prisma.address.updateMany({
       where: { userId },
-      data: { isActive: false, deactivatedAt: new Date() },
+      data: { status: 'DEACTIVATED', deactivatedAt: new Date() },
     }),
-    // 2. Anonymiser les données personnelles immédiatement
-    // Le suffixe userId préserve l'unicité de la contrainte @unique sur phone
+    // Anonymiser immédiatement
     this.prisma.user.update({
       where: { id: userId },
-      data: { phone: `[supprimé-${userId}]`, email: null },
+      data: { phone: `[supprimé-${userId}]`, email: null, passwordHash: null, firstName: null, lastName: null },
     }),
-    // 3. Invalider tous les OTP actifs
-    // Note : OtpCode n'est plus relié à User — lookup par phone original
-    // nécessaire avant anonymisation, ou stocker le phone dans la transaction
-    this.prisma.otpCode.updateMany({
-      where: { phone: /* phone récupéré avant anonymisation */ '' },
-      data: { used: true },
-    }),
-    // 4. Supprimer les souscriptions push
+    // Invalider tous les OTP
+    this.prisma.otpCode.updateMany({ where: { userId }, data: { used: true } }),
+    // Supprimer souscriptions push
     this.prisma.pushSubscription.deleteMany({ where: { userId } }),
   ]);
-  // Les visites, ratings et contributions sont conservés anonymisés
-  // (userId existe toujours en base mais phone = "[supprimé-...]")
+  // Les visites, ratings, reports, contributions sont conservés anonymisés
+  // Les notifications de l'utilisateur peuvent être supprimées immédiatement
+  await this.prisma.notification.deleteMany({ where: { userId } });
 }
 ```
 
-> **Note d'implémentation sur l'OTP** : suite à la suppression de la relation `OtpCode → User`, l'invalidation des OTP dans `deleteAccount` nécessite de récupérer le `phone` de l'utilisateur **avant** l'anonymisation dans la transaction. Récupérer le User d'abord, puis construire la transaction avec le `phone` original en mémoire.
-
-La purge définitive à 30 jours (suppression physique du User) peut être gérée par un cron NestJS (`@nestjs/schedule`) ou un job Render.com. Pour le prototype, l'anonymisation immédiate est suffisante — la purge physique est une amélioration production.
+La notification des contributeurs rattachés (adresses désactivées suite à la suppression) est envoyée avant le début de la transaction.
 
 ---
 
 ## 11. Tests
 
-Les tests sont **obligatoires**. Ils sont écrits et validés avant ou avec le code, pas après. Un endpoint non testé n'est pas considéré comme terminé.
+Les tests sont **obligatoires**. Endpoint non testé = endpoint non terminé.
 
 ### Tests unitaires
 
-Couvrent la logique métier pure, sans base de données.
-
-| Unité | Ce qui est testé |
-|-------|-----------------|
-| `generateUniqueCode` | Zéro collision sur 1 000 codes générés (mock Prisma), alphabet correct, gestion P2002 → retry |
-| `buildAssembledText` | Assemblage correct des steps, suppression de ponctuation finale, steps vides filtrés, step unique |
-| `refreshReliabilityScore` | Score correct pour : 0 votes + 0 visites (null), 100% conformes, 50-50, visites sans votes (score 70), passage sous 40 → notification déclenchée |
-| `toReliabilityBadge` | null → null, 0 → "red", 39 → "red", 40 → "orange", 69 → "orange", 70 → "green", 100 → "green" |
-| `buildAbuseHash` | Déterministe (même input → même hash), différent si date différente, différent si code différent |
-| `generateSequence` | Caractères exclus (0, O, I, L) jamais présents dans la sortie sur 10 000 générations |
-
-```bash
-# Exécution
-npx jest --testPathPattern=*.spec.ts --coverage
-```
+|
+ Unité 
+|
+ Ce qui est testé 
+|
+|
+-------
+|
+--------------------
+|
+|
+`generateUniqueCode`
+|
+ Zéro collision sur 1 000 codes en parallèle (mock Prisma) 
+|
+|
+`buildAssembledText`
+|
+ Assemblage correct, espaces, steps vides 
+|
+|
+`computeAverageRating`
+|
+ null si 0 ratings ; arrondi correct ; calcul correct 3 ratings 
+|
+|
+`generateSequence`
+|
+ O, 0, I, L jamais présents dans la sortie 
+|
+|
+`buildAssembledText`
+ après 
+`pendingUpdate`
+|
+ L'assembled text de la version publiée reste inchangé jusqu'à approbation 
+|
 
 ### Tests d'intégration
 
-Couvrent les endpoints avec une vraie base de données (PostgreSQL de test, isolée). Utilisent `@nestjs/testing` + `supertest`.
-
-**Endpoints obligatoirement testés avec cas nominal ET cas d'erreur :**
-
-| Endpoint | Cas nominal | Cas d'erreur |
-|----------|-------------|--------------|
-| `POST /auth/request-otp` | OTP envoyé (mock AT), OTP précédent invalidé | Téléphone invalide → 400 |
-| `POST /auth/verify-otp` | JWT retourné, User créé si inexistant | OTP expiré → 401, OTP invalide → 401 |
-| `DELETE /auth/account` | Compte anonymisé, adresses désactivées | Téléphone non-correspondant → 400 |
-| `POST /addresses` | Adresse créée, code généré | Hors périmètre → 400, sans JWT → 401 |
-| `GET /addresses/:code` | Données complètes avec `reliabilityBadge` | Code inexistant → 404, désactivé → 410 |
-| `GET /addresses/:code/resolve` | Données complètes | Code inexistant → 404, désactivé → 410, clé révoquée → 401 |
-| `GET /addresses/:code/verify` | Score numérique retourné | Clé invalide → 401 |
-| `GET /addresses/:code/eta` | ETA null si données insuffisantes, ETA calculé si données suffisantes | Clé invalide → 401, désactivé → 410 |
-| `POST /addresses/:code/contribution` | Contribution créée PENDING | Aucun champ → 400, adresse inactive → 410 |
-| `POST /addresses/:code/rate` | recorded: true, score mis à jour en base | Deuxième vote → recorded: false |
-| `POST /visits/confirm` | Visit enregistrée | Timestamps invalides → 400 |
-| `GET /zones/:id/analytics` | Analytics retournées | Quota insuffisant → 403 |
-| `POST /notifications/subscribe` | Souscription créée/upsert | Sans JWT → 401 |
-| `PATCH /admin/contributions/:id/approve` | Contribution APPROVED, steps mis à jour, assembledText recalculé | Sans rôle ADMIN → 403 |
-| `PATCH /admin/contributions/:id/reject` | Contribution REJECTED | Sans rôle ADMIN → 403 |
+|
+ Endpoint 
+|
+ Cas nominal 
+|
+ Cas d'erreur 
+|
+|
+----------
+|
+-------------
+|
+--------------
+|
+|
+`POST /auth/register`
+|
+ Compte créé + OTP envoyé (mock AT) 
+|
+ Téléphone dupliqué → 409 
+|
+|
+`POST /auth/verify-otp`
+|
+ JWT retourné 
+|
+ OTP expiré → 401 
+|
+|
+`POST /auth/login`
+|
+ JWT retourné 
+|
+ Mauvais mdp → 401, non vérifié → 403 
+|
+|
+`POST /auth/admin/login`
+|
+ JWT retourné avec rôle MODERATOR/ADMIN 
+|
+ Rôle HABITANT → 403 
+|
+|
+`DELETE /auth/account`
+|
+ Compte anonymisé, adresses désactivées 
+|
+ Phone mismatch → 400 
+|
+|
+`POST /addresses`
+|
+ Adresse créée, code généré 
+|
+ Hors périmètre → 400, suspendu → 403 
+|
+|
+`PATCH /addresses/:code`
+|
+ pendingUpdate défini, status PENDING_VALIDATION 
+|
+ Pas propriétaire → 403 
+|
+|
+`GET /addresses/:code`
+|
+ Données publiées retournées 
+|
+ 404, 410 
+|
+|
+`POST /addresses/:code/ratings`
+|
+ Rating créé 
+|
+ Stars invalides → 400, non auth → 401 
+|
+|
+`PATCH /addresses/:code/ratings`
+|
+ Rating mis à jour 
+|
+ Rating inexistant → 404 
+|
+|
+`POST /addresses/:code/reports`
+|
+ Report créé 
+|
+ Non auth → 401 
+|
+|
+`POST /addresses/:code/rattachements`
+|
+ Rattachement créé 
+|
+ Déjà rattaché → 409, adresse non publiée → 400 
+|
+|
+`POST /addresses/:code/propositions`
+|
+ Proposition PENDING 
+|
+ Non rattaché → 403 
+|
+|
+`PATCH /addresses/:code/propositions/:id/integrate`
+|
+ Champs appliqués 
+|
+ Non propriétaire → 403, mauvais état → 400 
+|
+|
+`GET /addresses/:code/resolve`
+|
+ Données complètes 
+|
+ 404, 410, clé révoquée → 401 
+|
+|
+`GET /addresses/:code/verify`
+|
+ averageRating + ratingCount 
+|
+ Clé invalide → 401 
+|
+|
+`PATCH /moderation/addresses/:code/approve`
+|
+ status PUBLISHED, notif propriétaire 
+|
+ Pas Modérateur → 403 
+|
+|
+`PATCH /moderation/addresses/:code/reject`
+|
+ status REJECTED, raison stockée 
+|
+ Raison absente → 400 
+|
+|
+`PATCH /moderation/propositions/:id/approve`
+|
+ MODERATOR_APPROVED, notif propriétaire 
+|
+ Pas Modérateur → 403 
+|
+|
+`PATCH /admin/habitants/:id/suspend`
+|
+ suspendedAt défini, notif Habitant 
+|
+ Pas Admin → 403 
+|
+|
+`POST /admin/moderators`
+|
+ Compte Modérateur créé 
+|
+ Pas Admin → 403 
+|
+|
+`GET /zones/:id/analytics`
+|
+ Analytics retournées 
+|
+ Quota insuffisant → 403 
+|
 
 ### Smoke test de démo
 
-Script automatisé exécutable avant chaque déploiement ou démonstration :
-
 ```typescript
-// scripts/smoke-test.ts
-// Valide le parcours complet :
-// 1. Request OTP → 200
-// 2. Verify OTP → JWT
-// 3. Signature Cloudinary → signature valide
-// 4. Create Address → code généré, reliabilityScore null
-// 5. GET /addresses/:code → reliabilityBadge null (pas encore évalué)
-// 6. Rate Address → recorded: true, score mis à jour en base
-// 7. GET /addresses/:code/verify (clé API de test) → reliabilityScore non null
-// 8. Confirm Visit → visitId retourné
-// 9. GET /addresses/:code/eta → basedOnVisits >= 1
+// scripts/smoke-test.ts — parcours complet
+// 1. Inscription Habitant → OTP → JWT
+// 2. Signature Cloudinary → signature valide
+// 3. Création adresse → code généré
+// 4. Approbation modération (mock ou compte Mod de test)
+// 5. Resolve via API Key → données complètes
+// 6. Rating adresse (JWT) → recorded
+// 7. Confirm Visit → visitId retourné
+// 8. Rattachement → rattachementId
+// 9. Proposition → propositionId PENDING
 ```
 
 ### Coverage cible
 
-**≥ 70% de couverture sur les services**. Les controllers et les guards ont une couverture minimale (tests d'intégration suffisent). Pas d'obsession du chiffre — la qualité des assertions compte plus que le pourcentage.
+≥ 70 % de couverture sur les services. La qualité des assertions prime sur le chiffre.
 
 ---
 
 ## 12. Les trois documentations vivantes
 
-Ces trois documents sont maintenus **simultanément** à chaque nouvel endpoint ou modification. Ils vivent dans le dépôt sous `docs/`. L'IA (Cursor, Claude, etc.) les met à jour au fur et à mesure de l'implémentation. Aucun d'eux ne doit jamais être en retard sur l'état réel de l'API.
+Ces trois documents vivent dans `docs/`. Mis à jour **simultanément** à chaque nouvel endpoint ou modification.
 
-### 1. `docs/API_POSTMAN.md` — Documentation Postman
+### `docs/API_POSTMAN.md`
 
-**Rôle** : permettre de tester manuellement chaque endpoint dans Postman sans aucun oubli. Dense, exhaustif, avec les requêtes exactes et les réponses attendues.
+Documentation Postman exhaustive : requêtes exactes, réponses attendues, cas d'erreur, variables d'environnement (`{{jwt}}`, `{{api_key}}`, `{{moderator_jwt}}`).
 
-**Structure par endpoint :**
-```markdown
-## POST /api/v1/auth/verify-otp
+### `docs/API_CONTRACT.md`
 
-**Auth** : Public
-**Body** :
-\`\`\`json
-{ "phone": "+22960000000", "code": "847291" }
-\`\`\`
-**Réponse 200** :
-\`\`\`json
-{ "data": { "accessToken": "eyJ...", "user": { ... } } }
-\`\`\`
-**Cas d'erreur** :
-- `401 INVALID_OR_EXPIRED_OTP` — OTP incorrect ou expiré
-- `400 INVALID_PHONE_FORMAT` — format invalide
-**Variables Postman** : stocker `accessToken` en `{{jwt}}`
-```
+Contrat de consommation frontend. Zéro terminologie NestJS/Prisma. URL de base, headers requis, shapes des requêtes et réponses, codes d'erreur machines, comportements spéciaux (410 vs 404, `averageRating: null` vs score 0). Mis à jour **avant** que le frontend commence à brancher un endpoint.
 
-### 2. `docs/API_CONTRACT.md` — Contrat de consommation frontend
+### `docs/DEPLOYMENT.md`
 
-**Rôle** : permettre au développeur frontend de savoir exactement quoi appeler, avec quoi, et quoi attendre — sans lire une ligne de code NestJS. C'est le document le plus important du projet.
-
-**Principes** :
-- Zéro terminologie NestJS ou Prisma.
-- Zéro détail d'implémentation.
-- URL de base, headers requis, shape exacte des requêtes et réponses, codes d'erreur machines à gérer, comportements spéciaux (410 vs 404, `reliabilityBadge` vs `reliabilityScore`).
-- Un tableau de `ENV` frontend requis (base URL, etc.).
-- Mis à jour **avant** que le frontend commence à brancher un endpoint.
-
-### 3. `docs/DEPLOYMENT.md` — Documentation de déploiement
-
-**Rôle** : permettre de déployer, redéployer ou diagnostiquer l'application depuis zéro en moins de 30 minutes.
-
-**Contenu** :
-- Variables d'environnement requises (sans valeurs) et leur source.
-- Étapes de déploiement sur Render.com (build command, start command, PostgreSQL linking).
-- Commandes de migration : `npx prisma migrate deploy`.
-- Commande de seed zones OSM : `npx ts-node scripts/seed-zones.ts`.
-- Configuration cron-job.org pour le réveil backend.
-- Checklist de vérification post-déploiement (smoke test).
-- Procédure de rollback.
-- **Note sur `DELETE /auth/account` avec body** : comportement à vérifier sur l'environnement Render (proxy éventuel).
+Déploiement depuis zéro en moins de 30 minutes : variables d'environnement, étapes Render.com, commandes migration, seed zones OSM, cron-job.org, checklist post-déploiement, procédure de rollback.
 
 ---
 
@@ -1503,31 +2364,25 @@ Ces trois documents sont maintenus **simultanément** à chaque nouvel endpoint 
 
 ### Philosophie
 
-**Déployer tôt, déployer souvent.** Un backend qui tourne uniquement en local n'est pas un backend — c'est un brouillon. Le déploiement précoce force à découvrir les problèmes d'environnement avant qu'ils deviennent bloquants.
+**Déployer tôt, déployer souvent.** Un backend qui tourne uniquement en local n'est pas un backend.
 
 ### Premier déploiement — déclencheur
 
-Le premier déploiement sur Render.com est effectué **dès que ces trois conditions sont remplies et testées** :
+Dès que ces trois conditions sont remplies :
 
-1. `POST /auth/request-otp` et `POST /auth/verify-otp` fonctionnels (auth complète).
+1. `POST /auth/register`, `POST /auth/verify-otp`, `POST /auth/login` fonctionnels.
 2. `POST /addresses` fonctionnel (création avec code généré).
-3. `GET /addresses/:code/resolve` fonctionnel (résolution complète).
-
-Tout le reste peut encore être sur mocks ou en cours. Ces trois endpoints constituent le **minimum viable** qui débloque le frontend sur son parcours critique.
+3. `GET /addresses/:code/resolve` fonctionnel.
 
 ### Configuration Render.com
 
 ```
-Build Command  : npm install && npx prisma generate && npx prisma migrate deploy && npm run build
-Start Command  : node dist/main.js
-Health Check   : GET /api/health → 200
+Build Command : npm install && npx prisma generate && npx prisma migrate deploy && npm run build
+Start Command : node dist/main.js
+Health Check  : GET /api/health → 200
 ```
 
-L'endpoint `GET /api/health` retourne simplement `{ "status": "ok", "timestamp": "..." }`. Il est utilisé par Render pour les health checks et par cron-job.org pour le réveil.
-
-### Déploiements suivants
-
-Chaque jalon fonctionnel testé déclenche un déploiement. Pas de "big bang" en fin de projet. La branche `main` est toujours déployable.
+L'endpoint `GET /api/health` retourne `{ "status": "ok", "timestamp": "..." }`.
 
 ---
 
@@ -1535,39 +2390,31 @@ Chaque jalon fonctionnel testé déclenche un déploiement. Pas de "big bang" en
 
 ### Commits
 
-Les commits suivent le format **Conventional Commits** :
+Format Conventional Commits :
 
 ```
-feat(addresses): add code generation with collision check
-test(addresses): add unit tests for generateUniqueCode including P2002 retry
-fix(auth): handle expired OTP correctly
-docs(api): update frontend contract with /resolve endpoint
-chore(prisma): add reliabilityScore field to Address model
+feat(auth): implement phone+password login for Habitants
+feat(addresses): add PENDING_VALIDATION state with pendingUpdate
+feat(rattachements): create rattachement model and endpoints
+feat(propositions): two-step moderation flow for contributor modifications
+feat(ratings): 5-star authenticated rating replacing binary vote
+test(auth): login flow with bcrypt password validation
+fix(moderation): return 400 when rejection reason is missing
+docs(api): update contract with new rating and report endpoints
+chore(prisma): add Rattachement, PropositionModification, Notification models
 ```
 
-**Règle absolue** : un commit = une unité fonctionnelle testée. Pas de commits "WIP", "fix", "misc". Chaque commit sur `main` doit laisser l'application dans un état déployable.
+Un commit = une unité fonctionnelle testée. Chaque commit sur `main` est déployable.
 
-### Granularité des commits — exemples
+### Ce qui ne passe pas
 
-- Ajout du modèle Prisma + migration → `chore(prisma): add Address model with reliabilityScore`
-- Implémentation du service de génération de code + tests unitaires → `feat(addresses): implement code generation` + `test(addresses): zero-collision test on 1000 codes, P2002 retry`
-- Endpoint `/resolve` + tests d'intégration + mise à jour des trois docs → trois commits séparés ou un commit groupé si atomiquement liés.
-
-### Ce qui ne passe pas en review
-
-- Code sans test sur un endpoint critique.
-- Endpoint documenté dans le Swagger mais absent de `docs/API_CONTRACT.md`.
-- Migration Prisma sans le code métier correspondant dans le même commit.
+- Endpoint critique sans test.
+- Endpoint dans Swagger absent de `docs/API_CONTRACT.md`.
+- Migration Prisma sans le code métier correspondant.
 - `console.log` laissé en production.
-- Clés ou secrets en dur dans le code.
-- Score numérique brut retourné sur l'endpoint public `GET /addresses/:code`.
-- `refreshReliabilityScore` appelé sans mise à jour en base (retour volatile interdit).
-
-### Gestion des branches
-
-- `main` — toujours déployable, toujours testé.
-- `feat/<nom>` — branches de développement. Mergées dans `main` uniquement quand le jalon est complet et les tests passent.
+- Secret ou clé en dur dans le code.
+- Route Modérateur/Admin sans guard de rôle.
 
 ### No over-engineering
 
-Avant d'introduire un pattern complexe (factory, decorator custom, abstract repository, etc.), la question à se poser est : **est-ce que l'application en a besoin maintenant, ou est-ce que j'anticipe un besoin hypothétique ?** Si c'est hypothétique, on ne l'implémente pas. La complexité se rajoute quand le besoin est réel, pas avant.
+Avant d'introduire un pattern complexe, la question : **est-ce que l'application en a besoin maintenant ?** Si la réponse est hypothétique, on ne l'implémente pas.
