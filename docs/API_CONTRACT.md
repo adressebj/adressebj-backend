@@ -32,6 +32,7 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `NOT_ADDRESS_OWNER` | 403 | Action d'administration sur une adresse dont on n'est pas propriétaire. |
 | `REVISION_ALREADY_PENDING` | 409 | Une modification est déjà en attente de validation pour cette adresse. |
 | `ADDRESS_ALREADY_DEACTIVATED` | 409 | Adresse déjà désactivée (modification/désactivation impossible). |
+| `INVALID_BOUNDING_BOX` | 400 | Aire carte invalide (`north < south` ou `east < west`). |
 | … | … | _(compléter au fil des endpoints)_ |
 
 ## Comportements spéciaux à connaître
@@ -156,6 +157,28 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 - **Réponse 200** : `{ "data": { "code": "…", "lifecycle": "DESACTIVEE" } }`.
 - Désactivation **définitive** (le code n'est jamais réattribué) : l'adresse renvoie ensuite `410` en public/API. Une éventuelle modification en attente sort de la file.
 - **Erreurs** : `404 ADDRESS_NOT_FOUND`, `403 NOT_ADDRESS_OWNER`, `409 ADDRESS_ALREADY_DEACTIVATED`.
+
+### `GET /map/addresses` — Surcouche carte browsable (public)
+
+- **Auth** : aucune (public).
+- **Query** : `north`, `south`, `east`, `west` (obligatoires, bornes de l'aire visible) ; `category` (optionnel, filtre).
+  Exemple : `/map/addresses?north=6.41&south=6.40&east=2.41&west=2.40&category=COMMERCE`.
+- **Réponse 200** : tableau de marqueurs.
+
+```json
+{
+  "data": [
+    { "code": "CAD-3M9P", "category": "COMMERCE", "gps": { "lat": 6.366, "lng": 2.421 },
+      "muted": false, "preview": { "photoUrl": "https://…", "code": "CAD-3M9P" } },
+    { "code": "AKP-7X3K", "category": "DOMICILE", "gps": { "lat": 6.367, "lng": 2.425 },
+      "muted": true, "preview": null }
+  ]
+}
+```
+
+- **Matrice de visibilité (appliquée côté serveur)** : `category = DOMICILE` → `muted: true`, `preview: null` (le contenu n'est accessible qu'en ouvrant `GET /addresses/:code`) ; toute autre catégorie → `muted: false`, `preview` = `{ photoUrl, code }`.
+- **Seules** les adresses **publiées** et **découvrables** (`mapDiscoverable = true`) de la bbox sont renvoyées. Une adresse non découvrable reste résolvable par code mais **n'apparaît jamais** ici.
+- **Erreurs** : `400 INVALID_BOUNDING_BOX` ; `400` de validation si une borne manque/hors plage.
 
 ### Modération (dashboard Modérateur/Admin) — `Authorization: Bearer <jwt mod/admin>`
 

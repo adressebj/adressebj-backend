@@ -935,6 +935,52 @@
           }
         }
       ]
+    },
+    {
+      "name": "Map",
+      "item": [
+        {
+          "name": "Browse map (bbox)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/map/addresses?north=6.41&south=6.40&east=2.41&west=2.40",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "map",
+                "addresses"
+              ],
+              "query": [
+                {
+                  "key": "north",
+                  "value": "6.41"
+                },
+                {
+                  "key": "south",
+                  "value": "6.40"
+                },
+                {
+                  "key": "east",
+                  "value": "2.41"
+                },
+                {
+                  "key": "west",
+                  "value": "2.40"
+                },
+                {
+                  "key": "category",
+                  "value": "COMMERCE",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Adresses publiées + découvrables dans une bbox. Matrice de visibilité appliquée côté serveur (domicile muet/preview null). category optionnel (décocher pour tout). Public."
+          }
+        }
+      ]
     }
   ],
   "variable": [
