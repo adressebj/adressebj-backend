@@ -26,6 +26,8 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `API_KEY_INVALID` | 401 | Clé API inconnue ou mal formée. |
 | `API_KEY_REVOKED` | 401 | Clé API révoquée. |
 | `API_KEY_EXPIRED` | 401 | Clé API expirée. |
+| `INVALID_RATING` | 400 | Note d'évaluation hors de l'intervalle entier 1–5. |
+| `ACCOUNT_NOT_ACTIVE` | 401 | Compte suspendu ou désactivé (rejet à l'authentification). |
 | … | … | _(compléter au fil des endpoints)_ |
 
 ## Comportements spéciaux à connaître
@@ -90,6 +92,26 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 }
 ```
 
+- **Erreurs** : `404 ADDRESS_NOT_FOUND`, `410 ADDRESS_INACTIVE`, `401 API_KEY_MISSING|API_KEY_INVALID|API_KEY_REVOKED|API_KEY_EXPIRED`.
+
+### `POST /addresses/:code/rate` — Évaluer une adresse (habitant)
+
+- **Auth** : `Authorization: Bearer <jwt habitant>`.
+- **Body** : `{ "stars": 4 }` — entier **1 à 5**.
+- **Réponse 200** : `{ "data": { "recorded": true, "averageRating": 3.8, "ratingCount": 13 } }`.
+- Une seule évaluation par habitant et par adresse : une nouvelle soumission **remplace** la précédente (modifiable à tout moment). La moyenne est recalculée immédiatement.
+- **Erreurs** : `400 INVALID_RATING` (note hors 1–5), `404 ADDRESS_NOT_FOUND` (adresse non publiée), `410 ADDRESS_INACTIVE` (désactivée). Un compte suspendu est refusé dès l'authentification (`401 ACCOUNT_NOT_ACTIVE`).
+
+### `GET /addresses/:code/verify` — Vérification (intégrateurs, clé API)
+
+- **Auth** : `Authorization: Bearer bj_live_…` (clé API). Chaque appel est météré.
+- **Réponse 200** :
+
+```json
+{ "data": { "code": "AKP-7X3K", "averageRating": 3.7, "ratingCount": 12, "published": true } }
+```
+
+- Conçu pour les cas de vérification (KYC fintech, banques, assurances). `averageRating` à `null` = « aucune évaluation » (à distinguer d'une note basse).
 - **Erreurs** : `404 ADDRESS_NOT_FOUND`, `410 ADDRESS_INACTIVE`, `401 API_KEY_MISSING|API_KEY_INVALID|API_KEY_REVOKED|API_KEY_EXPIRED`.
 
 <!-- Ajouter ici chaque endpoint au fur et à mesure de son implémentation. -->

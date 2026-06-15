@@ -19,7 +19,7 @@ function buildPrismaMock() {
     addressRevision: { create: jest.fn() },
     quartier: { findUniqueOrThrow: jest.fn() },
     contribution: { findMany: jest.fn() },
-    rating: { aggregate: jest.fn() },
+    rating: { aggregate: jest.fn(), upsert: jest.fn() },
     $transaction: jest.fn(),
   };
 }
@@ -254,6 +254,74 @@ describe('AddressesService', () => {
       const res = await service.getPublicPage('AKP-7X3K');
       expect(res.averageRating).toBeNull();
       expect(res.ratingCount).toBe(0);
+    });
+  });
+
+  describe('rate', () => {
+    it('upsert la note puis renvoie la moyenne recalculée', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.upsert.mockResolvedValue({});
+      prisma.rating.aggregate.mockResolvedValue({
+        _avg: { stars: 3.75 },
+        _count: { stars: 13 },
+      });
+
+      const res = await service.rate('user-1', 'AKP-7X3K', 4);
+
+      expect(res).toEqual({ recorded: true, averageRating: 3.8, ratingCount: 13 });
+      expect(prisma.rating.upsert).toHaveBeenCalledWith({
+        where: { userId_addressId: { userId: 'user-1', addressId: 'addr-1' } },
+        create: { userId: 'user-1', addressId: 'addr-1', stars: 4 },
+        update: { stars: 4 },
+      });
+    });
+
+    it.each([0, 6, 3.5])('rejette une note hors bornes (%s) → INVALID_RATING', async (stars) => {
+      await expect(service.rate('user-1', 'AKP-7X3K', stars)).rejects.toMatchObject({
+        response: { code: 'INVALID_RATING' },
+      });
+      expect(prisma.address.findUnique).not.toHaveBeenCalled();
+      expect(prisma.rating.upsert).not.toHaveBeenCalled();
+    });
+
+    it('404 si adresse non publiée (avant tout upsert)', async () => {
+      prisma.address.findUnique.mockResolvedValue(null);
+      await expect(service.rate('user-1', 'XXX-0000', 4)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.rating.upsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('verify', () => {
+    it('renvoie moyenne + published, et métère VERIFY', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.aggregate.mockResolvedValue({
+        _avg: { stars: 3.7 },
+        _count: { stars: 12 },
+      });
+
+      const res = await service.verify('AKP-7X3K', 'key-1');
+
+      expect(res).toEqual({
+        code: 'AKP-7X3K',
+        published: true,
+        averageRating: 3.7,
+        ratingCount: 12,
+      });
+      expect(apiKeys.logRequest).toHaveBeenCalledWith('key-1', ApiEndpoint.VERIFY);
+    });
+
+    it('410 si désactivée (pas de métering)', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        ...publishedAddress,
+        lifecycle: 'DESACTIVEE',
+        deactivatedAt: new Date('2026-03-14'),
+      });
+      await expect(service.verify('AKP-7X3K', 'key-1')).rejects.toThrow(
+        GoneException,
+      );
+      expect(apiKeys.logRequest).not.toHaveBeenCalled();
     });
   });
 });

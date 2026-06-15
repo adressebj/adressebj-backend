@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   GoneException,
   Injectable,
@@ -44,6 +45,20 @@ export interface ResolvedAddress {
   steps: unknown;
   assembledText: string;
   createdAt: Date;
+}
+
+export interface RatingSummary {
+  averageRating: number | null;
+  ratingCount: number;
+}
+
+export interface RateResult extends RatingSummary {
+  recorded: true;
+}
+
+export interface VerifyResult extends RatingSummary {
+  code: string;
+  published: true;
 }
 
 export interface PublicAddress {
@@ -237,6 +252,38 @@ export class AddressesService {
   }
 
   /**
+   * Évaluation 1–5 par un habitant (upsert sur (userId, addressId)).
+   * La moyenne est recalculée immédiatement. Borne hors 1–5 → INVALID_RATING.
+   */
+  async rate(userId: string, code: string, stars: number): Promise<RateResult> {
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
+      throw new BadRequestException({
+        code: 'INVALID_RATING',
+        message: 'La note doit être un entier entre 1 et 5.',
+      });
+    }
+    const address = await this.loadResolvable(code);
+    await this.prisma.rating.upsert({
+      where: { userId_addressId: { userId, addressId: address.id } },
+      create: { userId, addressId: address.id, stars },
+      update: { stars },
+    });
+    const summary = await this.aggregateRatings(address.id);
+    return { recorded: true, ...summary };
+  }
+
+  /**
+   * Vérification (intégrateurs KYC, clé API) : moyenne et nombre d'évaluations.
+   * Chaque appel est météré (ApiRequestLog VERIFY). Mêmes règles 404/410.
+   */
+  async verify(code: string, apiKeyId: string): Promise<VerifyResult> {
+    const address = await this.loadResolvable(code);
+    await this.apiKeys.logRequest(apiKeyId, ApiEndpoint.VERIFY);
+    const summary = await this.aggregateRatings(address.id);
+    return { code: address.code, published: true, ...summary };
+  }
+
+  /**
    * Charge une adresse résolvable publiquement, ou lève l'erreur idoine :
    * inexistante / jamais publiée → 404 (existence non exposée),
    * désactivée → 410.
@@ -274,9 +321,7 @@ export class AddressesService {
   }
 
   /** Score de fiabilité = moyenne des notes 1–5 arrondie au dixième, null si aucune. */
-  private async aggregateRatings(
-    addressId: string,
-  ): Promise<{ averageRating: number | null; ratingCount: number }> {
+  private async aggregateRatings(addressId: string): Promise<RatingSummary> {
     const agg = await this.prisma.rating.aggregate({
       where: { addressId },
       _avg: { stars: true },
