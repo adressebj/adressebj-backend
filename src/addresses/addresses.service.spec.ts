@@ -20,6 +20,7 @@ function buildPrismaMock() {
     quartier: { findUniqueOrThrow: jest.fn() },
     contribution: { findMany: jest.fn() },
     rating: { aggregate: jest.fn(), upsert: jest.fn() },
+    report: { create: jest.fn() },
     $transaction: jest.fn(),
   };
 }
@@ -322,6 +323,49 @@ describe('AddressesService', () => {
         GoneException,
       );
       expect(apiKeys.logRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('report', () => {
+    it('crée un signalement PENDING sur une adresse publiée', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.report.create.mockResolvedValue({ id: 'rep-1' });
+
+      const res = await service.report('user-1', 'AKP-7X3K', 'Démolie');
+
+      expect(res).toEqual({ reportId: 'rep-1', status: 'PENDING' });
+      expect(prisma.report.create).toHaveBeenCalledWith({
+        data: { addressId: 'addr-1', userId: 'user-1', message: 'Démolie' },
+      });
+    });
+
+    it('message absent → null', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.report.create.mockResolvedValue({ id: 'rep-2' });
+
+      await service.report('user-1', 'AKP-7X3K');
+      expect(prisma.report.create).toHaveBeenCalledWith({
+        data: { addressId: 'addr-1', userId: 'user-1', message: null },
+      });
+    });
+
+    it('404 si adresse non publiée', async () => {
+      prisma.address.findUnique.mockResolvedValue(null);
+      await expect(service.report('user-1', 'XXX-0000')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.report.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolvePublishedAddress', () => {
+    it('retourne id/code/ownerId d’une adresse publiée', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        ...publishedAddress,
+        userId: 'owner-9',
+      });
+      const res = await service.resolvePublishedAddress('AKP-7X3K');
+      expect(res).toEqual({ id: 'addr-1', code: 'AKP-7X3K', ownerId: 'owner-9' });
     });
   });
 });

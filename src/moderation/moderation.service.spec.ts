@@ -1,5 +1,10 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { RevisionStatus } from '@prisma/client';
+import {
+  ContributionStatus,
+  ReportStatus,
+  RevisionStatus,
+} from '@prisma/client';
+import { LocalisationsService } from '../localisations/localisations.service';
 import { ModerationService } from './moderation.service';
 
 function buildPrismaMock() {
@@ -7,20 +12,32 @@ function buildPrismaMock() {
     addressRevision: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       findMany: jest.fn(),
     },
     address: { update: jest.fn() },
+    report: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+    contribution: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      findMany: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
 }
 
 describe('ModerationService', () => {
   let prisma: ReturnType<typeof buildPrismaMock>;
+  let localisations: { cleanupIfEmpty: jest.Mock };
   let service: ModerationService;
 
   beforeEach(() => {
     prisma = buildPrismaMock();
-    service = new ModerationService(prisma as never);
+    localisations = { cleanupIfEmpty: jest.fn().mockResolvedValue(undefined) };
+    service = new ModerationService(
+      prisma as never,
+      localisations as unknown as LocalisationsService,
+    );
   });
 
   describe('approveRevision', () => {
@@ -134,6 +151,153 @@ describe('ModerationService', () => {
           reviewedById: 'mod-1',
         }),
       });
+    });
+  });
+
+  describe('resolveReport', () => {
+    it('passe le signalement à RESOLVED sans toucher l’adresse', async () => {
+      prisma.report.findUnique.mockResolvedValue({
+        id: 'rep-1',
+        addressId: 'addr-1',
+        status: ReportStatus.PENDING,
+        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+      });
+      prisma.report.update.mockResolvedValue({});
+
+      const res = await service.resolveReport('rep-1', 'mod-1');
+
+      expect(res).toMatchObject({
+        status: ReportStatus.RESOLVED,
+        addressDeactivated: false,
+      });
+      expect(prisma.address.update).not.toHaveBeenCalled();
+      expect(localisations.cleanupIfEmpty).not.toHaveBeenCalled();
+    });
+
+    it('rejette un signalement déjà traité (409)', async () => {
+      prisma.report.findUnique.mockResolvedValue({
+        id: 'rep-1',
+        status: ReportStatus.RESOLVED,
+        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+      });
+      await expect(service.resolveReport('rep-1', 'mod-1')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('signalement introuvable (404)', async () => {
+      prisma.report.findUnique.mockResolvedValue(null);
+      await expect(service.resolveReport('x', 'mod-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('deactivateFromReport', () => {
+    it('désactive l’adresse, périme la révision en attente, ACTIONNE le signalement, nettoie la localisation', async () => {
+      prisma.report.findUnique.mockResolvedValue({
+        id: 'rep-1',
+        addressId: 'addr-1',
+        status: ReportStatus.PENDING,
+        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+      });
+      const addrUpdate = jest.fn().mockResolvedValue({});
+      const revUpdateMany = jest.fn().mockResolvedValue({});
+      const repUpdate = jest.fn().mockResolvedValue({});
+      prisma.$transaction.mockImplementation(async (cb: any) =>
+        cb({
+          address: { update: addrUpdate },
+          addressRevision: { updateMany: revUpdateMany },
+          report: { update: repUpdate },
+        }),
+      );
+
+      const res = await service.deactivateFromReport('rep-1', 'mod-1', 'Fraude');
+
+      expect(res).toMatchObject({
+        status: ReportStatus.ACTIONED,
+        addressDeactivated: true,
+      });
+      expect(addrUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'addr-1' },
+          data: expect.objectContaining({
+            lifecycle: 'DESACTIVEE',
+            deactivatedById: 'mod-1',
+            deactivationReason: 'Fraude',
+          }),
+        }),
+      );
+      expect(revUpdateMany).toHaveBeenCalledWith({
+        where: { addressId: 'addr-1', status: RevisionStatus.EN_ATTENTE_VALIDATION },
+        data: { status: RevisionStatus.OBSOLETE },
+      });
+      expect(localisations.cleanupIfEmpty).toHaveBeenCalledWith('loc-1');
+    });
+
+    it('refuse de désactiver une adresse déjà désactivée (409)', async () => {
+      prisma.report.findUnique.mockResolvedValue({
+        id: 'rep-1',
+        addressId: 'addr-1',
+        status: ReportStatus.PENDING,
+        address: { code: 'AKP-1234', lifecycle: 'DESACTIVEE', localisationId: null },
+      });
+      await expect(
+        service.deactivateFromReport('rep-1', 'mod-1'),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('contributions', () => {
+    it('approuve une contribution PENDING', async () => {
+      prisma.contribution.findUnique.mockResolvedValue({
+        id: 'c-1',
+        status: ContributionStatus.PENDING,
+        address: { code: 'AKP-1234' },
+      });
+      prisma.contribution.update.mockResolvedValue({});
+
+      const res = await service.approveContribution('c-1', 'mod-1');
+
+      expect(res.status).toBe(ContributionStatus.APPROVED);
+      expect(prisma.contribution.update).toHaveBeenCalledWith({
+        where: { id: 'c-1' },
+        data: expect.objectContaining({
+          status: ContributionStatus.APPROVED,
+          reviewedById: 'mod-1',
+        }),
+      });
+    });
+
+    it('rejette une contribution PENDING', async () => {
+      prisma.contribution.findUnique.mockResolvedValue({
+        id: 'c-1',
+        status: ContributionStatus.PENDING,
+        address: { code: 'AKP-1234' },
+      });
+      prisma.contribution.update.mockResolvedValue({});
+
+      const res = await service.rejectContribution('c-1', 'mod-1');
+      expect(res.status).toBe(ContributionStatus.REJECTED);
+    });
+
+    it('contribution déjà traitée (409)', async () => {
+      prisma.contribution.findUnique.mockResolvedValue({
+        id: 'c-1',
+        status: ContributionStatus.APPROVED,
+        address: { code: 'AKP-1234' },
+      });
+      await expect(service.approveContribution('c-1', 'mod-1')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('contribution introuvable (404)', async () => {
+      prisma.contribution.findUnique.mockResolvedValue(null);
+      await expect(service.rejectContribution('x', 'mod-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

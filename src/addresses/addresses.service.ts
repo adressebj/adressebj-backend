@@ -75,6 +75,18 @@ export interface PublicAddress {
   createdAt: Date;
 }
 
+export interface ReportResult {
+  reportId: string;
+  status: 'PENDING';
+}
+
+/** Identité minimale d'une adresse publiée, pour les modules tiers (contributions). */
+export interface PublishedAddressRef {
+  id: string;
+  code: string;
+  ownerId: string;
+}
+
 @Injectable()
 export class AddressesService {
   constructor(
@@ -281,6 +293,28 @@ export class AddressesService {
     await this.apiKeys.logRequest(apiKeyId, ApiEndpoint.VERIFY);
     const summary = await this.aggregateRatings(address.id);
     return { code: address.code, published: true, ...summary };
+  }
+
+  /** Signalement d'une adresse par un habitant (file de modération n°2). */
+  async report(
+    userId: string,
+    code: string,
+    message?: string,
+  ): Promise<ReportResult> {
+    const address = await this.loadResolvable(code);
+    const created = await this.prisma.report.create({
+      data: { addressId: address.id, userId, message: message ?? null },
+    });
+    return { reportId: created.id, status: 'PENDING' };
+  }
+
+  /**
+   * Résout l'identité d'une adresse publiée par code (404/410 sinon).
+   * Exposé pour les modules tiers (contributions) sans fuiter la logique interne.
+   */
+  async resolvePublishedAddress(code: string): Promise<PublishedAddressRef> {
+    const address = await this.loadResolvable(code);
+    return { id: address.id, code: address.code, ownerId: address.userId };
   }
 
   /**
