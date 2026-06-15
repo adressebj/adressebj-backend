@@ -415,6 +415,119 @@
           ]
         },
         {
+          "name": "Update address",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}"
+              ]
+            },
+            "description": "Nouvelle version (catégorie/étapes/photo ; GPS non modifiable) → révision EN_ATTENTE. Public garde l'ancienne version. 409 REVISION_ALREADY_PENDING si une modif est déjà en attente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"COMMERCE\",\n  \"steps\": [\n    \"Nouveau repère\",\n    \"Portail vert\"\n  ],\n  \"photoUrl\": \"https://example.com/new.jpg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Toggle discoverable",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/discoverable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "discoverable"
+              ]
+            },
+            "description": "Bascule mapDiscoverable (retire/ajoute l'adresse de la carte browsable).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discoverable\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Deactivate address",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}"
+              ]
+            },
+            "description": "Désactivation définitive par le propriétaire → 410 ensuite. 409 si déjà désactivée."
+          }
+        },
+        {
           "name": "Public page",
           "request": {
             "method": "GET",

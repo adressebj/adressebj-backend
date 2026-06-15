@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   GoneException,
   Injectable,
   InternalServerErrorException,
@@ -12,6 +13,7 @@ import { LocalisationsService } from '../localisations/localisations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildAssembledText, generateSequence } from './address-code';
 import { CreateAddressDto } from './dto/create-address.dto';
+import { UpdateAddressDto } from './dto/update-address.dto';
 
 const MAX_CODE_ATTEMPTS = 50;
 
@@ -78,6 +80,22 @@ export interface PublicAddress {
 export interface ReportResult {
   reportId: string;
   status: 'PENDING';
+}
+
+export interface UpdatedAddress {
+  code: string;
+  revisionStatus: RevisionStatus;
+  published: boolean;
+}
+
+export interface DiscoverableResult {
+  code: string;
+  mapDiscoverable: boolean;
+}
+
+export interface DeactivatedAddress {
+  code: string;
+  lifecycle: 'DESACTIVEE';
 }
 
 /** Identité minimale d'une adresse publiée, pour les modules tiers (contributions). */
@@ -315,6 +333,142 @@ export class AddressesService {
   async resolvePublishedAddress(code: string): Promise<PublishedAddressRef> {
     const address = await this.loadResolvable(code);
     return { id: address.id, code: address.code, ownerId: address.userId };
+  }
+
+  /**
+   * Modification d'adresse (propriétaire) : soumet une nouvelle révision
+   * EN_ATTENTE_VALIDATION. Le pointeur ne bascule qu'à l'approbation — le public
+   * continue de voir l'ancienne version. Le code ne change jamais.
+   */
+  async update(
+    userId: string,
+    code: string,
+    dto: UpdateAddressDto,
+  ): Promise<UpdatedAddress> {
+    const address = await this.loadOwnedAddress(code, userId);
+    if (address.lifecycle === 'DESACTIVEE') {
+      throw new ConflictException({
+        code: 'ADDRESS_ALREADY_DEACTIVATED',
+        message: 'Une adresse désactivée ne peut plus être modifiée.',
+      });
+    }
+
+    // Filet applicatif (l'index partiel one_pending_revision_per_address garantit l'unicité).
+    const pending = await this.prisma.addressRevision.findFirst({
+      where: {
+        addressId: address.id,
+        status: RevisionStatus.EN_ATTENTE_VALIDATION,
+      },
+    });
+    if (pending) {
+      throw new ConflictException({
+        code: 'REVISION_ALREADY_PENDING',
+        message: 'Une modification est déjà en attente de validation.',
+      });
+    }
+
+    await this.prisma.addressRevision.create({
+      data: {
+        addressId: address.id,
+        category: dto.category,
+        steps: dto.steps,
+        assembledText: buildAssembledText(dto.steps),
+        photoUrl: dto.photoUrl,
+        // GPS porté par la localisation figée (la NAV utilise ce point).
+        gpsLat: address.localisation!.gpsLat,
+        gpsLng: address.localisation!.gpsLng,
+        status: RevisionStatus.EN_ATTENTE_VALIDATION,
+      },
+    });
+
+    return {
+      code: address.code,
+      revisionStatus: RevisionStatus.EN_ATTENTE_VALIDATION,
+      published: address.publishedRevisionId != null,
+    };
+  }
+
+  /** Bascule la découvrabilité cartographique (propriétaire). */
+  async setDiscoverable(
+    userId: string,
+    code: string,
+    discoverable: boolean,
+  ): Promise<DiscoverableResult> {
+    const address = await this.loadOwnedAddress(code, userId);
+    if (address.lifecycle === 'DESACTIVEE') {
+      throw new ConflictException({
+        code: 'ADDRESS_ALREADY_DEACTIVATED',
+        message: 'Une adresse désactivée ne peut plus être modifiée.',
+      });
+    }
+    const updated = await this.prisma.address.update({
+      where: { id: address.id },
+      data: { mapDiscoverable: discoverable },
+    });
+    return { code: updated.code, mapDiscoverable: updated.mapDiscoverable };
+  }
+
+  /**
+   * Désactivation par le propriétaire : lifecycle DESACTIVEE, révision en attente
+   * → OBSOLETE (sortie de file, sans rejet/motif) — atomique. Puis nettoyage de
+   * la localisation si elle devient vide. Le code n'est jamais réattribué.
+   */
+  async deactivate(userId: string, code: string): Promise<DeactivatedAddress> {
+    const address = await this.loadOwnedAddress(code, userId);
+    if (address.lifecycle === 'DESACTIVEE') {
+      throw new ConflictException({
+        code: 'ADDRESS_ALREADY_DEACTIVATED',
+        message: 'Cette adresse est déjà désactivée.',
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.address.update({
+        where: { id: address.id },
+        data: {
+          lifecycle: 'DESACTIVEE',
+          deactivatedAt: new Date(),
+          deactivatedById: userId,
+        },
+      });
+      await tx.addressRevision.updateMany({
+        where: {
+          addressId: address.id,
+          status: RevisionStatus.EN_ATTENTE_VALIDATION,
+        },
+        data: { status: RevisionStatus.OBSOLETE },
+      });
+    });
+
+    if (address.localisationId) {
+      await this.localisations.cleanupIfEmpty(address.localisationId);
+    }
+
+    return { code: address.code, lifecycle: 'DESACTIVEE' };
+  }
+
+  /**
+   * Charge une adresse détenue par l'utilisateur : inexistante → 404,
+   * détenue par un autre → 403 (le code est public, mais pas son administration).
+   */
+  private async loadOwnedAddress(code: string, userId: string) {
+    const address = await this.prisma.address.findUnique({
+      where: { code },
+      include: { localisation: { select: { gpsLat: true, gpsLng: true } } },
+    });
+    if (!address) {
+      throw new NotFoundException({
+        code: 'ADDRESS_NOT_FOUND',
+        message: 'Adresse introuvable.',
+      });
+    }
+    if (address.userId !== userId) {
+      throw new ForbiddenException({
+        code: 'NOT_ADDRESS_OWNER',
+        message: "Vous n'êtes pas le propriétaire de cette adresse.",
+      });
+    }
+    return address;
   }
 
   /**

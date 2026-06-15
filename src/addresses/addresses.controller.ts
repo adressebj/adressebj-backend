@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -18,13 +20,18 @@ import { AuthUser } from '../auth/types/jwt-payload';
 import {
   AddressesService,
   CreatedAddress,
+  DeactivatedAddress,
+  DiscoverableResult,
   MyAddress,
   RateResult,
   ReportResult,
+  UpdatedAddress,
 } from './addresses.service';
 import { CreateAddressDto } from './dto/create-address.dto';
+import { DiscoverableDto } from './dto/discoverable.dto';
 import { RateAddressDto } from './dto/rate-address.dto';
 import { ReportAddressDto } from './dto/report-address.dto';
+import { UpdateAddressDto } from './dto/update-address.dto';
 
 @ApiTags('addresses')
 @ApiBearerAuth()
@@ -70,5 +77,35 @@ export class AddressesController {
     @Body() dto: ReportAddressDto,
   ): Promise<ReportResult> {
     return this.addresses.report(user.id, code, dto.message);
+  }
+
+  @Patch(':code')
+  @ApiOperation({ summary: 'Modifier une adresse (→ nouvelle révision)' })
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('code') code: string,
+    @Body() dto: UpdateAddressDto,
+  ): Promise<UpdatedAddress> {
+    return this.addresses.update(user.id, code, dto);
+  }
+
+  @Patch(':code/discoverable')
+  @ApiOperation({ summary: 'Basculer la découverte cartographique' })
+  setDiscoverable(
+    @CurrentUser() user: AuthUser,
+    @Param('code') code: string,
+    @Body() dto: DiscoverableDto,
+  ): Promise<DiscoverableResult> {
+    return this.addresses.setDiscoverable(user.id, code, dto.discoverable);
+  }
+
+  @Delete(':code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Désactiver une adresse (propriétaire)' })
+  deactivate(
+    @CurrentUser() user: AuthUser,
+    @Param('code') code: string,
+  ): Promise<DeactivatedAddress> {
+    return this.addresses.deactivate(user.id, code);
   }
 }
