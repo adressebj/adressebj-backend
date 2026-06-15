@@ -4,6 +4,7 @@ import { AddressesModule } from './addresses/addresses.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { LocalisationsModule } from './localisations/localisations.module';
+import { ModerationModule } from './moderation/moderation.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QuartiersModule } from './quartiers/quartiers.module';
 
@@ -15,6 +16,7 @@ import { QuartiersModule } from './quartiers/quartiers.module';
     QuartiersModule,
     LocalisationsModule,
     AddressesModule,
+    ModerationModule,
     HealthModule,
   ],
 })
