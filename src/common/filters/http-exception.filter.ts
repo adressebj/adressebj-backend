@@ -13,6 +13,7 @@ interface ErrorBody {
   error: string;
   code: string;
   message: string | string[];
+  [key: string]: unknown;
 }
 
 /**
@@ -63,7 +64,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
         };
       }
       const obj = res as Record<string, unknown>;
+      // Les champs métier additionnels (ex. address_code, deactivated_at) sont
+      // conservés ; les champs canoniques ci-dessous priment.
       return {
+        ...obj,
         statusCode: status,
         error: (obj.error as string) ?? defaultError,
         code: (obj.code as string) ?? this.fallbackCode(status),

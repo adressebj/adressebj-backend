@@ -1,5 +1,10 @@
-import { ConflictException } from '@nestjs/common';
-import { AddressCategory, RevisionStatus } from '@prisma/client';
+import {
+  ConflictException,
+  GoneException,
+  NotFoundException,
+} from '@nestjs/common';
+import { AddressCategory, ApiEndpoint, RevisionStatus } from '@prisma/client';
+import { ApiKeysService } from '../api-keys/api-keys.service';
 import { LocalisationsService } from '../localisations/localisations.service';
 import { AddressesService } from './addresses.service';
 
@@ -13,6 +18,8 @@ function buildPrismaMock() {
     },
     addressRevision: { create: jest.fn() },
     quartier: { findUniqueOrThrow: jest.fn() },
+    contribution: { findMany: jest.fn() },
+    rating: { aggregate: jest.fn() },
     $transaction: jest.fn(),
   };
 }
@@ -28,14 +35,17 @@ const dto = {
 describe('AddressesService', () => {
   let prisma: ReturnType<typeof buildPrismaMock>;
   let localisations: { resolveOrCreate: jest.Mock };
+  let apiKeys: { logRequest: jest.Mock };
   let service: AddressesService;
 
   beforeEach(() => {
     prisma = buildPrismaMock();
     localisations = { resolveOrCreate: jest.fn() };
+    apiKeys = { logRequest: jest.fn().mockResolvedValue(undefined) };
     service = new AddressesService(
       prisma as never,
       localisations as unknown as LocalisationsService,
+      apiKeys as unknown as ApiKeysService,
     );
   });
 
@@ -132,6 +142,118 @@ describe('AddressesService', () => {
         category: 'DOMICILE',
         currentRevisionStatus: 'PUBLIEE',
       });
+    });
+  });
+
+  const publishedAddress = {
+    id: 'addr-1',
+    code: 'AKP-7X3K',
+    lifecycle: 'ACTIVE',
+    publishedRevisionId: 'rev-1',
+    publishedRevision: {
+      category: 'DOMICILE',
+      steps: ['Partir du marché'],
+      assembledText: 'Partir du marché.',
+      photoUrl: 'https://res.cloudinary.com/x.jpg',
+    },
+    localisation: {
+      gpsLat: 6.3676,
+      gpsLng: 2.4252,
+      quartier: { id: 'q-1', name: 'Akpakpa', prefix: 'AKP' },
+    },
+    deactivatedAt: null,
+    createdAt: new Date('2026-05-01'),
+  };
+
+  describe('resolve', () => {
+    it('renvoie le contenu publié, le GPS Localisation et métère l’appel', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+
+      const res = await service.resolve('AKP-7X3K', 'key-1');
+
+      expect(res).toMatchObject({
+        code: 'AKP-7X3K',
+        category: 'DOMICILE',
+        quartier: { id: 'q-1', name: 'Akpakpa', prefix: 'AKP' },
+        gps: { lat: 6.3676, lng: 2.4252 },
+        assembledText: 'Partir du marché.',
+      });
+      expect(apiKeys.logRequest).toHaveBeenCalledWith(
+        'key-1',
+        ApiEndpoint.RESOLVE,
+      );
+    });
+
+    it('404 si inexistante', async () => {
+      prisma.address.findUnique.mockResolvedValue(null);
+      await expect(service.resolve('XXX-0000', 'key-1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(apiKeys.logRequest).not.toHaveBeenCalled();
+    });
+
+    it('404 si active mais jamais publiée (existence non exposée)', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        ...publishedAddress,
+        publishedRevisionId: null,
+        publishedRevision: null,
+      });
+      await expect(service.resolve('AKP-7X3K', 'key-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('410 si désactivée', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        ...publishedAddress,
+        lifecycle: 'DESACTIVEE',
+        deactivatedAt: new Date('2026-03-14'),
+      });
+      await expect(service.resolve('AKP-7X3K', 'key-1')).rejects.toThrow(
+        GoneException,
+      );
+      expect(apiKeys.logRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getPublicPage', () => {
+    it('renvoie le contenu + moyenne arrondie + notes terrain approuvées', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.aggregate.mockResolvedValue({
+        _avg: { stars: 3.6666 },
+        _count: { stars: 12 },
+      });
+      prisma.contribution.findMany.mockResolvedValue([
+        { message: 'Sens unique le matin', createdAt: new Date('2026-05-02') },
+      ]);
+
+      const res = await service.getPublicPage('AKP-7X3K');
+
+      expect(res).toMatchObject({
+        code: 'AKP-7X3K',
+        quartier: { name: 'Akpakpa', prefix: 'AKP' },
+        averageRating: 3.7,
+        ratingCount: 12,
+      });
+      expect(res.fieldNotes).toHaveLength(1);
+      expect(prisma.contribution.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { addressId: 'addr-1', status: 'APPROVED' },
+        }),
+      );
+    });
+
+    it('averageRating null si aucune évaluation', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.aggregate.mockResolvedValue({
+        _avg: { stars: null },
+        _count: { stars: 0 },
+      });
+      prisma.contribution.findMany.mockResolvedValue([]);
+
+      const res = await service.getPublicPage('AKP-7X3K');
+      expect(res.averageRating).toBeNull();
+      expect(res.ratingCount).toBe(0);
     });
   });
 });
