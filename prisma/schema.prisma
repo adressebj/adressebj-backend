@@ -201,6 +201,7 @@ model AddressRevision {
 enum RevisionStatus {
   EN_ATTENTE_VALIDATION
   PUBLIEE
+  ARCHIVEE    // ancienne version publiée, remplacée par une révision approuvée (cf. DECISIONS.md)
   REJETEE     // décision de modération : exige reviewedById + rejectionReason
   OBSOLETE    // terminal non-décisionnel : auteur disparu (suppression compte) OU adresse parente désactivée
 }
