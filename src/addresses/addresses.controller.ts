@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -10,8 +19,10 @@ import {
   AddressesService,
   CreatedAddress,
   MyAddress,
+  RateResult,
 } from './addresses.service';
 import { CreateAddressDto } from './dto/create-address.dto';
+import { RateAddressDto } from './dto/rate-address.dto';
 
 @ApiTags('addresses')
 @ApiBearerAuth()
@@ -36,5 +47,16 @@ export class AddressesController {
   @ApiOperation({ summary: 'Mes adresses et leur état' })
   mine(@CurrentUser() user: AuthUser): Promise<MyAddress[]> {
     return this.addresses.listMine(user.id);
+  }
+
+  @Post(':code/rate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Évaluer une adresse (1–5, upsert)' })
+  rate(
+    @CurrentUser() user: AuthUser,
+    @Param('code') code: string,
+    @Body() dto: RateAddressDto,
+  ): Promise<RateResult> {
+    return this.addresses.rate(user.id, code, dto.stars);
   }
 }

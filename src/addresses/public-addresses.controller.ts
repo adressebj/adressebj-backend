@@ -7,6 +7,7 @@ import {
   AddressesService,
   PublicAddress,
   ResolvedAddress,
+  VerifyResult,
 } from './addresses.service';
 
 /**
@@ -35,5 +36,16 @@ export class PublicAddressesController {
     @CurrentApiKey() apiKey: ApiKey,
   ): Promise<ResolvedAddress> {
     return this.addresses.resolve(code, apiKey.id);
+  }
+
+  @Get(':code/verify')
+  @UseGuards(ApiKeyGuard)
+  @ApiSecurity('api-key')
+  @ApiOperation({ summary: 'Vérification (moyenne /5, clé API, météré)' })
+  verify(
+    @Param('code') code: string,
+    @CurrentApiKey() apiKey: ApiKey,
+  ): Promise<VerifyResult> {
+    return this.addresses.verify(code, apiKey.id);
   }
 }

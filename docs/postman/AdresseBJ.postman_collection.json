@@ -262,6 +262,49 @@
           }
         },
         {
+          "name": "Rate address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stars\": 4\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/rate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "rate"
+              ]
+            },
+            "description": "Évaluation 1–5 (upsert sur l'habitant). Renvoie la moyenne recalculée. 400 INVALID_RATING hors bornes, 404 si non publiée."
+          }
+        },
+        {
           "name": "Public page",
           "request": {
             "method": "GET",
@@ -306,6 +349,35 @@
               ]
             },
             "description": "Header Authorization: Bearer {{apiKey}} (bj_live_…). Résolution complète + métering. 401 si clé absente/invalide/révoquée/expirée."
+          }
+        },
+        {
+          "name": "Verify (clé API)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{apiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "verify"
+              ]
+            },
+            "description": "Moyenne /5 + nombre d'évaluations + published (clé API, météré VERIFY). averageRating null = aucune évaluation."
           }
         }
       ]
