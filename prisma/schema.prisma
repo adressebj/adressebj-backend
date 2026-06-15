@@ -19,7 +19,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Prisma 7 : l'URL de connexion vit dans prisma.config.ts (Migrate) et
+  // dans l'adapter @prisma/adapter-pg côté client (cf. PrismaService). Voir DECISIONS.md.
 }
 
 // ─── Utilisateurs ─────────────────────────────────────────────────────────────
