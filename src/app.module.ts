@@ -9,6 +9,7 @@ import { LocalisationsModule } from './localisations/localisations.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QuartiersModule } from './quartiers/quartiers.module';
+import { VisitsModule } from './visits/visits.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { QuartiersModule } from './quartiers/quartiers.module';
     AddressesModule,
     ContributionsModule,
     ModerationModule,
+    VisitsModule,
     HealthModule,
   ],
 })

@@ -33,6 +33,10 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `REVISION_ALREADY_PENDING` | 409 | Une modification est déjà en attente de validation pour cette adresse. |
 | `ADDRESS_ALREADY_DEACTIVATED` | 409 | Adresse déjà désactivée (modification/désactivation impossible). |
 | `INVALID_BOUNDING_BOX` | 400 | Aire carte invalide (`north < south` ou `east < west`). |
+| `INVALID_VISIT_TIMESTAMPS` | 400 | Arrivée antérieure au départ. |
+| `VISIT_NOT_FOUND` | 404 | Visite (web) introuvable à la confirmation. |
+| `VISIT_ID_REQUIRED` | 400 | Confirmation web sans `visitId`. |
+| `VISIT_FIELDS_REQUIRED` | 400 | Remontée API sans `addressCode`/`departAt`. |
 | … | … | _(compléter au fil des endpoints)_ |
 
 ## Comportements spéciaux à connaître
@@ -179,6 +183,22 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 - **Matrice de visibilité (appliquée côté serveur)** : `category = DOMICILE` → `muted: true`, `preview: null` (le contenu n'est accessible qu'en ouvrant `GET /addresses/:code`) ; toute autre catégorie → `muted: false`, `preview` = `{ photoUrl, code }`.
 - **Seules** les adresses **publiées** et **découvrables** (`mapDiscoverable = true`) de la bbox sont renvoyées. Une adresse non découvrable reste résolvable par code mais **n'apparaît jamais** ici.
 - **Erreurs** : `400 INVALID_BOUNDING_BOX` ; `400` de validation si une borne manque/hors plage.
+
+### `POST /visits/start` — Départ de navigation (public, anonyme)
+
+- **Auth** : aucune.
+- **Body** : `{ "addressCode": "AKP-7X3K", "departAt": "2026-05-17T09:00:00Z" }`.
+- **Réponse 201** : `{ "data": { "visitId": "…" } }`.
+- L'adresse doit être publiée (sinon `404`/`410`). Les visites alimentent l'ETA/analytics — **jamais** le score de fiabilité.
+
+### `POST /visits/confirm` — Confirmation d'arrivée (public **ou** clé API)
+
+Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Bearer bj_live_…` → remontée intégrateur ; sinon → confirmation web.
+
+- **Web** (sans clé) — Body : `{ "visitId": "…", "arrivedAt": "2026-05-17T09:14:00Z" }`.
+- **API** (clé `bj_live_…`) — Body : `{ "addressCode": "AKP-7X3K", "departAt": "…", "arrivedAt": "…", "finalPrice": 1500 }`. Chaque appel est météré.
+- **Réponse 201** : `{ "data": { "visitId": "…", "recorded": true } }`.
+- **Erreurs** : `400 INVALID_VISIT_TIMESTAMPS` (arrivée < départ), `404 VISIT_NOT_FOUND` (web), `400 VISIT_ID_REQUIRED` / `400 VISIT_FIELDS_REQUIRED` (champs manquants selon le mode), `401 API_KEY_*` (clé fournie mais invalide).
 
 ### Modération (dashboard Modérateur/Admin) — `Authorization: Bearer <jwt mod/admin>`
 

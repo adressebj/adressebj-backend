@@ -981,6 +981,129 @@
           }
         }
       ]
+    },
+    {
+      "name": "Visits",
+      "item": [
+        {
+          "name": "Start visit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"addressCode\": \"{{addressCode}}\",\n  \"departAt\": \"2026-05-17T09:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/visits/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visits",
+                "start"
+              ]
+            },
+            "description": "Départ de navigation (public, anonyme). 201 {visitId}. 404/410 si adresse non publiée."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d=pm.response.json().data;",
+                  "if(d&&d.visitId)pm.collectionVariables.set('visitId',d.visitId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm visit (web)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"visitId\": \"{{visitId}}\",\n  \"arrivedAt\": \"2026-05-17T09:14:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/visits/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visits",
+                "confirm"
+              ]
+            },
+            "description": "Confirmation web « J'y suis » (sans clé). 400 INVALID_VISIT_TIMESTAMPS si arrivée<départ, 404 VISIT_NOT_FOUND."
+          }
+        },
+        {
+          "name": "Confirm visit (clé API)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{apiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"addressCode\": \"{{addressCode}}\",\n  \"departAt\": \"2026-05-17T09:00:00Z\",\n  \"arrivedAt\": \"2026-05-17T09:14:00Z\",\n  \"finalPrice\": 1500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/visits/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visits",
+                "confirm"
+              ]
+            },
+            "description": "Remontée intégrateur (clé bj_live_…). Crée une visite complète + métère CONFIRM."
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -1002,6 +1125,10 @@
     },
     {
       "key": "contributionId",
+      "value": ""
+    },
+    {
+      "key": "visitId",
       "value": ""
     }
   ]
