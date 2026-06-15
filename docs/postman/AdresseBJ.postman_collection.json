@@ -1,48 +1,1008 @@
 {
   "info": {
+    "_postman_id": "91a8c9b3-6cf4-4cad-ae7f-ffda05300a94",
     "name": "AdresseBJ — Backend API",
-    "description": "Collection vivante de l'API AdresseBJ. À maintenir en synchro stricte avec l'API réelle (cf. docs/API_POSTMAN.md). Variables d'environnement : baseUrl, jwt, jwtMod, apiKey.",
+    "description": "Collection vivante de l'API AdresseBJ. À maintenir en synchro stricte avec l'API réelle (cf. docs/API_POSTMAN.md). Variables d'environnement : baseUrl, jwt, jwtMod, apiKey. Variables de collection : addressCode, revisionId (auto-capturées).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
       "name": "Auth",
-      "item": []
+      "item": [
+        {
+          "name": "Request OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+22990000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/request-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "request-otp"
+              ]
+            },
+            "description": "Envoie un OTP au numéro (provider dev : code visible dans les logs serveur)."
+          }
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+22990000000\",\n  \"code\": \"123456\",\n  \"email\": \"habitant@example.com\",\n  \"password\": \"motdepasse123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Crée l'habitant après vérification de l'OTP. Capture {{jwt}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.token) pm.environment.set('jwt', d.token);",
+                  "pm.test('token reçu', () => pm.expect(d.token).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (habitant)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+22990000000\",\n  \"password\": \"motdepasse123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Connexion par téléphone OU email (un seul des deux). Capture {{jwt}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.token) pm.environment.set('jwt', d.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (modérateur)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"moderateur@example.com\",\n  \"password\": \"motdepasse123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Connexion modérateur/admin par email. Capture {{jwtMod}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.token) pm.environment.set('jwtMod', d.token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "Addresses",
-      "item": []
-    },
-    {
-      "name": "Map",
-      "item": []
-    },
-    {
-      "name": "Visits",
-      "item": []
+      "item": [
+        {
+          "name": "Create address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"COMMERCE\",\n  \"steps\": [\n    \"Partir du carrefour\",\n    \"Boutique verte\"\n  ],\n  \"photoUrl\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n  \"gpsLat\": 6.4001,\n  \"gpsLng\": 2.4001\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses"
+              ]
+            },
+            "description": "localisationId résolu côté serveur (jamais envoyé par le client). Capture {{addressCode}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.code) pm.collectionVariables.set('addressCode', d.code);",
+                  "pm.test('révision n°1 en attente', () => pm.expect(d.revisionStatus).to.eql('EN_ATTENTE_VALIDATION'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "My addresses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/mine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "mine"
+              ]
+            },
+            "description": "Liste les adresses de l'habitant connecté + leur état (published, statut de révision)."
+          }
+        },
+        {
+          "name": "Rate address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stars\": 4\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/rate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "rate"
+              ]
+            },
+            "description": "Évaluation 1–5 (upsert sur l'habitant). Renvoie la moyenne recalculée. 400 INVALID_RATING hors bornes, 404 si non publiée."
+          }
+        },
+        {
+          "name": "Report address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"La maison a été démolie.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/report",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "report"
+              ]
+            },
+            "description": "Signalement (message facultatif). 201 {reportId,status:PENDING}. 404/410 selon l'état."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d=pm.response.json().data;",
+                  "if(d&&d.reportId)pm.collectionVariables.set('reportId',d.reportId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit contribution",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Sens unique le matin, entrer par le nord.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/contribution",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "contribution"
+              ]
+            },
+            "description": "Contribution terrain (requise, non vide). 201 {contributionId,status:PENDING}. 400 CONTRIBUTION_MESSAGE_REQUIRED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d=pm.response.json().data;",
+                  "if(d&&d.contributionId)pm.collectionVariables.set('contributionId',d.contributionId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update address",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}"
+              ]
+            },
+            "description": "Nouvelle version (catégorie/étapes/photo ; GPS non modifiable) → révision EN_ATTENTE. Public garde l'ancienne version. 409 REVISION_ALREADY_PENDING si une modif est déjà en attente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"COMMERCE\",\n  \"steps\": [\n    \"Nouveau repère\",\n    \"Portail vert\"\n  ],\n  \"photoUrl\": \"https://example.com/new.jpg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Toggle discoverable",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/discoverable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "discoverable"
+              ]
+            },
+            "description": "Bascule mapDiscoverable (retire/ajoute l'adresse de la carte browsable).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"discoverable\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Deactivate address",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}"
+              ]
+            },
+            "description": "Désactivation définitive par le propriétaire → 410 ensuite. 409 si déjà désactivée."
+          }
+        },
+        {
+          "name": "Public page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}"
+              ]
+            },
+            "description": "Public, sans auth. 200 si publiée, 404 si jamais publiée/inexistante, 410 si désactivée."
+          }
+        },
+        {
+          "name": "Resolve (clé API)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{apiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "resolve"
+              ]
+            },
+            "description": "Header Authorization: Bearer {{apiKey}} (bj_live_…). Résolution complète + métering. 401 si clé absente/invalide/révoquée/expirée."
+          }
+        },
+        {
+          "name": "Verify (clé API)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{apiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "verify"
+              ]
+            },
+            "description": "Moyenne /5 + nombre d'évaluations + published (clé API, météré VERIFY). averageRating null = aucune évaluation."
+          }
+        }
+      ]
     },
     {
       "name": "Moderation",
-      "item": []
-    },
-    {
-      "name": "Admin",
-      "item": []
+      "item": [
+        {
+          "name": "List pending revisions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/revisions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "revisions"
+              ]
+            },
+            "description": "File des révisions EN_ATTENTE_VALIDATION (Mod/Admin). Capture {{revisionId}} (1re entrée)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (Array.isArray(d) && d.length) pm.collectionVariables.set('revisionId', d[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Approve revision",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/revisions/{{revisionId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "revisions",
+                "{{revisionId}}",
+                "approve"
+              ]
+            },
+            "description": "Publie la révision et bascule le pointeur. L'ancienne version publiée passe ARCHIVEE."
+          }
+        },
+        {
+          "name": "Reject revision",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Photo illisible\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/revisions/{{revisionId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "revisions",
+                "{{revisionId}}",
+                "reject"
+              ]
+            },
+            "description": "Rejette la révision (motif obligatoire). Le pointeur public reste inchangé."
+          }
+        },
+        {
+          "name": "List reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "reports"
+              ]
+            },
+            "description": "File 2 : signalements PENDING. Chaque item porte ownerInactiveOver90Days."
+          }
+        },
+        {
+          "name": "Resolve report",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/reports/{{reportId}}/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "reports",
+                "{{reportId}}",
+                "resolve"
+              ]
+            },
+            "description": "Marque le signalement RESOLVED (adresse intacte)."
+          }
+        },
+        {
+          "name": "Deactivate reported address",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/reports/{{reportId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "reports",
+                "{{reportId}}",
+                "deactivate"
+              ]
+            },
+            "description": "Désactive l'adresse signalée (motif facultatif). Adresse → 410 public.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Adresse frauduleuse\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List contributions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/contributions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "contributions"
+              ]
+            },
+            "description": "File 3 : contributions terrain PENDING."
+          }
+        },
+        {
+          "name": "Approve contribution",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/contributions/{{contributionId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "contributions",
+                "{{contributionId}}",
+                "approve"
+              ]
+            },
+            "description": "Approuve → note terrain publique (jamais injectée dans steps)."
+          }
+        },
+        {
+          "name": "Reject contribution",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/contributions/{{contributionId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "contributions",
+                "{{contributionId}}",
+                "reject"
+              ]
+            },
+            "description": "Rejette la contribution."
+          }
+        }
+      ]
     },
     {
       "name": "Quartiers",
-      "item": []
+      "item": [
+        {
+          "name": "List active quartiers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/quartiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "quartiers"
+              ]
+            },
+            "description": "Liste publique des quartiers actifs (id, name, prefix)."
+          }
+        }
+      ]
     },
     {
-      "name": "Notifications",
-      "item": []
-    },
-    {
-      "name": "Upload",
-      "item": []
+      "name": "Map",
+      "item": [
+        {
+          "name": "Browse map (bbox)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/map/addresses?north=6.41&south=6.40&east=2.41&west=2.40",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "map",
+                "addresses"
+              ],
+              "query": [
+                {
+                  "key": "north",
+                  "value": "6.41"
+                },
+                {
+                  "key": "south",
+                  "value": "6.40"
+                },
+                {
+                  "key": "east",
+                  "value": "2.41"
+                },
+                {
+                  "key": "west",
+                  "value": "2.40"
+                },
+                {
+                  "key": "category",
+                  "value": "COMMERCE",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Adresses publiées + découvrables dans une bbox. Matrice de visibilité appliquée côté serveur (domicile muet/preview null). category optionnel (décocher pour tout). Public."
+          }
+        }
+      ]
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000/api" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "addressCode",
+      "value": ""
+    },
+    {
+      "key": "revisionId",
+      "value": ""
+    },
+    {
+      "key": "reportId",
+      "value": ""
+    },
+    {
+      "key": "contributionId",
+      "value": ""
+    }
   ]
 }

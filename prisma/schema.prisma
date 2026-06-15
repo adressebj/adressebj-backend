@@ -19,7 +19,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Prisma 7 : l'URL de connexion vit dans prisma.config.ts (Migrate) et
+  // dans l'adapter @prisma/adapter-pg côté client (cf. PrismaService). Voir DECISIONS.md.
 }
 
 // ─── Utilisateurs ─────────────────────────────────────────────────────────────
@@ -200,6 +201,7 @@ model AddressRevision {
 enum RevisionStatus {
   EN_ATTENTE_VALIDATION
   PUBLIEE
+  ARCHIVEE    // ancienne version publiée, remplacée par une révision approuvée (cf. DECISIONS.md)
   REJETEE     // décision de modération : exige reviewedById + rejectionReason
   OBSOLETE    // terminal non-décisionnel : auteur disparu (suppression compte) OU adresse parente désactivée
 }
