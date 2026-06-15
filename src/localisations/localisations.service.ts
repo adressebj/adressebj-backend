@@ -18,7 +18,9 @@ export class LocalisationsService {
     private readonly prisma: PrismaService,
     config: ConfigService,
   ) {
-    this.radiusM = Number(config.get<string>('LOCALISATION_RADIUS_METERS') ?? 15);
+    this.radiusM = Number(
+      config.get<string>('LOCALISATION_RADIUS_METERS') ?? 15,
+    );
   }
 
   /** Quartier d'un point : point-dans-polygone si dispo, sinon le plus proche du centre. */
@@ -38,7 +40,8 @@ export class LocalisationsService {
     if (withCenter.length === 0) {
       throw new BadRequestException({
         code: 'COORDINATES_OUT_OF_COVERAGE',
-        message: 'Ces coordonnées ne sont rattachables à aucun quartier couvert.',
+        message:
+          'Ces coordonnées ne sont rattachables à aucun quartier couvert.',
       });
     }
     return withCenter.reduce((best, q) =>

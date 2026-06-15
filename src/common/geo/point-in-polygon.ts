@@ -7,7 +7,7 @@ function outerRing(polygon: unknown): Position[] | null {
   if (
     typeof polygon === 'object' &&
     'coordinates' in polygon &&
-    Array.isArray((polygon as { coordinates: unknown }).coordinates)
+    Array.isArray(polygon.coordinates)
   ) {
     const coords = (polygon as { coordinates: unknown[] }).coordinates;
     const ring = coords[0];
@@ -15,7 +15,7 @@ function outerRing(polygon: unknown): Position[] | null {
   }
   // Tableau d'anneaux : [ring, ...]
   if (Array.isArray(polygon) && isRing(polygon[0])) {
-    return polygon[0] as Position[];
+    return polygon[0];
   }
   // Anneau brut : [[lng,lat], ...]
   if (isRing(polygon)) return polygon;

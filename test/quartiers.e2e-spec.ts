@@ -21,7 +21,9 @@ describe('Quartiers (e2e)', () => {
     }).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     app.useGlobalInterceptors(new TransformInterceptor());
     await app.init();
 
@@ -29,7 +31,12 @@ describe('Quartiers (e2e)', () => {
     await prisma.quartier.upsert({
       where: { prefix },
       update: { isActive: true },
-      create: { name: 'Quartier Test', prefix, centerLat: 6.37, centerLng: 2.42 },
+      create: {
+        name: 'Quartier Test',
+        prefix,
+        centerLat: 6.37,
+        centerLng: 2.42,
+      },
     });
   });
 
@@ -39,9 +46,13 @@ describe('Quartiers (e2e)', () => {
   });
 
   it('GET /api/quartiers → liste les quartiers actifs (enveloppe data)', async () => {
-    const res = await request(app.getHttpServer()).get('/api/quartiers').expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/api/quartiers')
+      .expect(200);
     expect(Array.isArray(res.body.data)).toBe(true);
-    const found = res.body.data.find((q: { prefix: string }) => q.prefix === prefix);
+    const found = res.body.data.find(
+      (q: { prefix: string }) => q.prefix === prefix,
+    );
     expect(found).toMatchObject({ name: 'Quartier Test', prefix });
   });
 });

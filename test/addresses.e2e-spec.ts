@@ -31,7 +31,9 @@ describe('Addresses creation (e2e)', () => {
   const http = () => request(app.getHttpServer());
 
   async function cleanup() {
-    await prisma.addressRevision.deleteMany({ where: { address: { user: { phone } } } });
+    await prisma.addressRevision.deleteMany({
+      where: { address: { user: { phone } } },
+    });
     await prisma.address.deleteMany({ where: { user: { phone } } });
     await prisma.localisation.deleteMany({ where: { quartier: { prefix } } });
     await prisma.otpCode.deleteMany({ where: { phone } });
@@ -46,7 +48,11 @@ describe('Addresses creation (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
@@ -55,7 +61,12 @@ describe('Addresses creation (e2e)', () => {
 
     await cleanup();
     await prisma.quartier.create({
-      data: { name: 'Test Addr', prefix, centerLat: gps.gpsLat, centerLng: gps.gpsLng },
+      data: {
+        name: 'Test Addr',
+        prefix,
+        centerLat: gps.gpsLat,
+        centerLng: gps.gpsLng,
+      },
     });
 
     // Inscription habitant → JWT
@@ -92,7 +103,9 @@ describe('Addresses creation (e2e)', () => {
       .expect(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].published).toBe(false);
-    expect(res.body.data[0].currentRevisionStatus).toBe('EN_ATTENTE_VALIDATION');
+    expect(res.body.data[0].currentRevisionStatus).toBe(
+      'EN_ATTENTE_VALIDATION',
+    );
   });
 
   it('refuse une 2ᵉ adresse au même emplacement (409)', async () => {

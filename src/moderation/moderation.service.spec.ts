@@ -4,7 +4,11 @@ import { ModerationService } from './moderation.service';
 
 function buildPrismaMock() {
   return {
-    addressRevision: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+    addressRevision: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      findMany: jest.fn(),
+    },
     address: { update: jest.fn() },
     $transaction: jest.fn(),
   };
@@ -38,12 +42,18 @@ describe('ModerationService', () => {
 
       const res = await service.approveRevision('rev-2', 'mod-1');
 
-      expect(res).toMatchObject({ status: RevisionStatus.PUBLIEE, published: true });
+      expect(res).toMatchObject({
+        status: RevisionStatus.PUBLIEE,
+        published: true,
+      });
       // nouvelle révision → PUBLIEE
       expect(revUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'rev-2' },
-          data: expect.objectContaining({ status: RevisionStatus.PUBLIEE, reviewedById: 'mod-1' }),
+          data: expect.objectContaining({
+            status: RevisionStatus.PUBLIEE,
+            reviewedById: 'mod-1',
+          }),
         }),
       );
       // pointeur bascule
@@ -108,7 +118,11 @@ describe('ModerationService', () => {
       });
       prisma.addressRevision.update.mockResolvedValue({});
 
-      const res = await service.rejectRevision('rev-1', 'mod-1', 'Photo illisible');
+      const res = await service.rejectRevision(
+        'rev-1',
+        'mod-1',
+        'Photo illisible',
+      );
 
       expect(res.status).toBe(RevisionStatus.REJETEE);
       expect(prisma.address.update).not.toHaveBeenCalled();

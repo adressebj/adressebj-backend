@@ -17,7 +17,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         secret: config.getOrThrow<string>('JWT_SECRET'),
         // `ms` StringValue (ex. '7d', '12h') — typé via template literal pour satisfaire @nestjs/jwt.
         signOptions: {
-          expiresIn: (config.get<string>('JWT_EXPIRES_IN') ?? '7d') as `${number}d`,
+          expiresIn: (config.get<string>('JWT_EXPIRES_IN') ??
+            '7d') as `${number}d`,
         },
       }),
     }),

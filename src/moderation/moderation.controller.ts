@@ -22,13 +22,17 @@ export class ModerationController {
   constructor(private readonly moderation: ModerationService) {}
 
   @Get('revisions')
-  @ApiOperation({ summary: 'File 1 : révisions en attente (créations + modifications)' })
+  @ApiOperation({
+    summary: 'File 1 : révisions en attente (créations + modifications)',
+  })
   listRevisions(): Promise<PendingRevision[]> {
     return this.moderation.listPendingRevisions();
   }
 
   @Patch('revisions/:id/approve')
-  @ApiOperation({ summary: 'Valider une révision (devient PUBLIEE, bascule le pointeur)' })
+  @ApiOperation({
+    summary: 'Valider une révision (devient PUBLIEE, bascule le pointeur)',
+  })
   approve(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
@@ -37,7 +41,9 @@ export class ModerationController {
   }
 
   @Patch('revisions/:id/reject')
-  @ApiOperation({ summary: 'Rejeter une révision (motif obligatoire, pointeur inchangé)' })
+  @ApiOperation({
+    summary: 'Rejeter une révision (motif obligatoire, pointeur inchangé)',
+  })
   reject(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,

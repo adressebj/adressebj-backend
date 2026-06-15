@@ -22,7 +22,9 @@ export class AddressesController {
   constructor(private readonly addresses: AddressesService) {}
 
   @Post()
-  @ApiOperation({ summary: "Création d'adresse (rattachement localisation auto)" })
+  @ApiOperation({
+    summary: "Création d'adresse (rattachement localisation auto)",
+  })
   create(
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateAddressDto,

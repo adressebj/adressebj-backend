@@ -126,7 +126,8 @@ export class AuthService {
     if ((dto.phone && dto.email) || (!dto.phone && !dto.email)) {
       throw new BadRequestException({
         code: 'INVALID_LOGIN_IDENTIFIER',
-        message: 'Fournir soit un numéro (habitant), soit un email (modérateur/admin).',
+        message:
+          'Fournir soit un numéro (habitant), soit un email (modérateur/admin).',
       });
     }
 

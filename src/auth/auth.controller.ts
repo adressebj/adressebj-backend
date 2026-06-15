@@ -18,14 +18,18 @@ export class AuthController {
   }
 
   @Post('register')
-  @ApiOperation({ summary: 'Inscription habitant (vérifie OTP, définit email + mot de passe)' })
+  @ApiOperation({
+    summary: 'Inscription habitant (vérifie OTP, définit email + mot de passe)',
+  })
   register(@Body() dto: RegisterDto): Promise<AuthResult> {
     return this.auth.register(dto);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Connexion (habitant via phone, mod/admin via email)' })
+  @ApiOperation({
+    summary: 'Connexion (habitant via phone, mod/admin via email)',
+  })
   login(@Body() dto: LoginDto): Promise<AuthResult> {
     return this.auth.login(dto);
   }
