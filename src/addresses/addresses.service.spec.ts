@@ -378,6 +378,79 @@ describe('AddressesService', () => {
     });
   });
 
+  describe('mapAddresses', () => {
+    const bounds = { north: 6.4, south: 6.34, east: 2.46, west: 2.4 };
+
+    it('applique la matrice de visibilité (domicile muet, autres avec preview)', async () => {
+      prisma.address.findMany.mockResolvedValue([
+        {
+          code: 'CAD-3M9P',
+          localisation: { gpsLat: 6.366, gpsLng: 2.421 },
+          publishedRevision: { category: 'COMMERCE', photoUrl: 'https://x/c.jpg' },
+        },
+        {
+          code: 'AKP-7X3K',
+          localisation: { gpsLat: 6.367, gpsLng: 2.425 },
+          publishedRevision: { category: 'DOMICILE', photoUrl: 'https://x/d.jpg' },
+        },
+      ]);
+
+      const res = await service.mapAddresses(bounds);
+
+      expect(res[0]).toEqual({
+        code: 'CAD-3M9P',
+        category: 'COMMERCE',
+        gps: { lat: 6.366, lng: 2.421 },
+        muted: false,
+        preview: { photoUrl: 'https://x/c.jpg', code: 'CAD-3M9P' },
+      });
+      expect(res[1]).toEqual({
+        code: 'AKP-7X3K',
+        category: 'DOMICILE',
+        gps: { lat: 6.367, lng: 2.425 },
+        muted: true,
+        preview: null,
+      });
+    });
+
+    it('ne retourne que les adresses publiées, actives et découvrables, dans la bbox', async () => {
+      prisma.address.findMany.mockResolvedValue([]);
+      await service.mapAddresses(bounds);
+      expect(prisma.address.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            lifecycle: 'ACTIVE',
+            mapDiscoverable: true,
+            publishedRevisionId: { not: null },
+            localisation: {
+              gpsLat: { gte: 6.34, lte: 6.4 },
+              gpsLng: { gte: 2.4, lte: 2.46 },
+            },
+          }),
+        }),
+      );
+    });
+
+    it('filtre par catégorie quand fournie', async () => {
+      prisma.address.findMany.mockResolvedValue([]);
+      await service.mapAddresses({ ...bounds, category: 'COMMERCE' });
+      expect(prisma.address.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            publishedRevision: { category: 'COMMERCE' },
+          }),
+        }),
+      );
+    });
+
+    it('bounding box invalide (north<south) → 400 INVALID_BOUNDING_BOX', async () => {
+      await expect(
+        service.mapAddresses({ north: 6.0, south: 6.4, east: 2.46, west: 2.4 }),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_BOUNDING_BOX' } });
+      expect(prisma.address.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   const ownedAddress = {
     id: 'addr-1',
     code: 'AKP-7X3K',

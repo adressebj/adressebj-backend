@@ -7,7 +7,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { ApiEndpoint, RevisionStatus } from '@prisma/client';
+import { AddressCategory, ApiEndpoint, RevisionStatus } from '@prisma/client';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { LocalisationsService } from '../localisations/localisations.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -96,6 +96,22 @@ export interface DiscoverableResult {
 export interface DeactivatedAddress {
   code: string;
   lifecycle: 'DESACTIVEE';
+}
+
+export interface MapMarker {
+  code: string;
+  category: string;
+  gps: { lat: number; lng: number };
+  muted: boolean;
+  preview: { photoUrl: string; code: string } | null;
+}
+
+export interface MapBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+  category?: string;
 }
 
 /** Identité minimale d'une adresse publiée, pour les modules tiers (contributions). */
@@ -215,6 +231,56 @@ export class AddressesService {
         category: a.publishedRevision?.category ?? latest?.category ?? null,
         currentRevisionStatus: latest?.status ?? null,
         createdAt: a.createdAt,
+      };
+    });
+  }
+
+  /**
+   * Surcouche carte : adresses publiées + découvrables dans une bounding box.
+   * La matrice de visibilité (domicile muet / autres en clair) est appliquée
+   * ICI, côté serveur — jamais déléguée au client.
+   */
+  async mapAddresses(bounds: MapBounds): Promise<MapMarker[]> {
+    if (bounds.north < bounds.south || bounds.east < bounds.west) {
+      throw new BadRequestException({
+        code: 'INVALID_BOUNDING_BOX',
+        message: 'La bounding box est invalide (north<south ou east<west).',
+      });
+    }
+
+    const addresses = await this.prisma.address.findMany({
+      where: {
+        lifecycle: 'ACTIVE',
+        mapDiscoverable: true,
+        publishedRevisionId: { not: null },
+        localisation: {
+          gpsLat: { gte: bounds.south, lte: bounds.north },
+          gpsLng: { gte: bounds.west, lte: bounds.east },
+        },
+        ...(bounds.category
+          ? {
+              publishedRevision: {
+                category: bounds.category as AddressCategory,
+              },
+            }
+          : {}),
+      },
+      select: {
+        code: true,
+        localisation: { select: { gpsLat: true, gpsLng: true } },
+        publishedRevision: { select: { category: true, photoUrl: true } },
+      },
+    });
+
+    return addresses.map((a) => {
+      const rev = a.publishedRevision!;
+      const muted = rev.category === AddressCategory.DOMICILE;
+      return {
+        code: a.code,
+        category: rev.category,
+        gps: { lat: a.localisation!.gpsLat, lng: a.localisation!.gpsLng },
+        muted,
+        preview: muted ? null : { photoUrl: rev.photoUrl, code: a.code },
       };
     });
   }
