@@ -305,6 +305,116 @@
           }
         },
         {
+          "name": "Report address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"La maison a été démolie.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/report",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "report"
+              ]
+            },
+            "description": "Signalement (message facultatif). 201 {reportId,status:PENDING}. 404/410 selon l'état."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d=pm.response.json().data;",
+                  "if(d&&d.reportId)pm.collectionVariables.set('reportId',d.reportId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit contribution",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Sens unique le matin, entrer par le nord.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/contribution",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "contribution"
+              ]
+            },
+            "description": "Contribution terrain (requise, non vide). 201 {contributionId,status:PENDING}. 400 CONTRIBUTION_MESSAGE_REQUIRED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d=pm.response.json().data;",
+                  "if(d&&d.contributionId)pm.collectionVariables.set('contributionId',d.contributionId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Public page",
           "request": {
             "method": "GET",
@@ -498,6 +608,196 @@
             },
             "description": "Rejette la révision (motif obligatoire). Le pointeur public reste inchangé."
           }
+        },
+        {
+          "name": "List reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "reports"
+              ]
+            },
+            "description": "File 2 : signalements PENDING. Chaque item porte ownerInactiveOver90Days."
+          }
+        },
+        {
+          "name": "Resolve report",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/reports/{{reportId}}/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "reports",
+                "{{reportId}}",
+                "resolve"
+              ]
+            },
+            "description": "Marque le signalement RESOLVED (adresse intacte)."
+          }
+        },
+        {
+          "name": "Deactivate reported address",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/reports/{{reportId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "reports",
+                "{{reportId}}",
+                "deactivate"
+              ]
+            },
+            "description": "Désactive l'adresse signalée (motif facultatif). Adresse → 410 public.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Adresse frauduleuse\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List contributions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/contributions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "contributions"
+              ]
+            },
+            "description": "File 3 : contributions terrain PENDING."
+          }
+        },
+        {
+          "name": "Approve contribution",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/contributions/{{contributionId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "contributions",
+                "{{contributionId}}",
+                "approve"
+              ]
+            },
+            "description": "Approuve → note terrain publique (jamais injectée dans steps)."
+          }
+        },
+        {
+          "name": "Reject contribution",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtMod}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/moderation/contributions/{{contributionId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "moderation",
+                "contributions",
+                "{{contributionId}}",
+                "reject"
+              ]
+            },
+            "description": "Rejette la contribution."
+          }
         }
       ]
     },
@@ -535,6 +835,14 @@
     },
     {
       "key": "revisionId",
+      "value": ""
+    },
+    {
+      "key": "reportId",
+      "value": ""
+    },
+    {
+      "key": "contributionId",
       "value": ""
     }
   ]

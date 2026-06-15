@@ -20,9 +20,11 @@ import {
   CreatedAddress,
   MyAddress,
   RateResult,
+  ReportResult,
 } from './addresses.service';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { RateAddressDto } from './dto/rate-address.dto';
+import { ReportAddressDto } from './dto/report-address.dto';
 
 @ApiTags('addresses')
 @ApiBearerAuth()
@@ -58,5 +60,15 @@ export class AddressesController {
     @Body() dto: RateAddressDto,
   ): Promise<RateResult> {
     return this.addresses.rate(user.id, code, dto.stars);
+  }
+
+  @Post(':code/report')
+  @ApiOperation({ summary: 'Signaler une adresse (file de modération)' })
+  report(
+    @CurrentUser() user: AuthUser,
+    @Param('code') code: string,
+    @Body() dto: ReportAddressDto,
+  ): Promise<ReportResult> {
+    return this.addresses.report(user.id, code, dto.message);
   }
 }

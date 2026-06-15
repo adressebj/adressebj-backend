@@ -6,10 +6,15 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthUser } from '../auth/types/jwt-payload';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { DeactivateAddressDto } from './dto/deactivate-address.dto';
 import { RejectRevisionDto } from './dto/reject-revision.dto';
 import {
+  ContributionDecision,
   ModerationService,
+  PendingContribution,
+  PendingReport,
   PendingRevision,
+  ReportDecision,
   RevisionDecision,
 } from './moderation.service';
 
@@ -50,5 +55,56 @@ export class ModerationController {
     @Body() dto: RejectRevisionDto,
   ): Promise<RevisionDecision> {
     return this.moderation.rejectRevision(id, user.id, dto.reason);
+  }
+
+  @Get('reports')
+  @ApiOperation({ summary: 'File 2 : signalements en attente' })
+  listReports(): Promise<PendingReport[]> {
+    return this.moderation.listPendingReports();
+  }
+
+  @Patch('reports/:id/resolve')
+  @ApiOperation({ summary: 'Marquer un signalement comme résolu' })
+  resolveReport(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ReportDecision> {
+    return this.moderation.resolveReport(id, user.id);
+  }
+
+  @Patch('reports/:id/deactivate')
+  @ApiOperation({ summary: "Désactiver l'adresse signalée" })
+  deactivateReported(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: DeactivateAddressDto,
+  ): Promise<ReportDecision> {
+    return this.moderation.deactivateFromReport(id, user.id, dto.reason);
+  }
+
+  @Get('contributions')
+  @ApiOperation({ summary: 'File 3 : contributions terrain en attente' })
+  listContributions(): Promise<PendingContribution[]> {
+    return this.moderation.listPendingContributions();
+  }
+
+  @Patch('contributions/:id/approve')
+  @ApiOperation({
+    summary: 'Approuver une contribution (info terrain publique)',
+  })
+  approveContribution(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ContributionDecision> {
+    return this.moderation.approveContribution(id, user.id);
+  }
+
+  @Patch('contributions/:id/reject')
+  @ApiOperation({ summary: 'Rejeter une contribution' })
+  rejectContribution(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ContributionDecision> {
+    return this.moderation.rejectContribution(id, user.id);
   }
 }

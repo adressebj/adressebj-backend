@@ -27,6 +27,7 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `API_KEY_REVOKED` | 401 | Clé API révoquée. |
 | `API_KEY_EXPIRED` | 401 | Clé API expirée. |
 | `INVALID_RATING` | 400 | Note d'évaluation hors de l'intervalle entier 1–5. |
+| `CONTRIBUTION_MESSAGE_REQUIRED` | 400 | Message de contribution vide. |
 | `ACCOUNT_NOT_ACTIVE` | 401 | Compte suspendu ou désactivé (rejet à l'authentification). |
 | … | … | _(compléter au fil des endpoints)_ |
 
@@ -113,5 +114,29 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 
 - Conçu pour les cas de vérification (KYC fintech, banques, assurances). `averageRating` à `null` = « aucune évaluation » (à distinguer d'une note basse).
 - **Erreurs** : `404 ADDRESS_NOT_FOUND`, `410 ADDRESS_INACTIVE`, `401 API_KEY_MISSING|API_KEY_INVALID|API_KEY_REVOKED|API_KEY_EXPIRED`.
+
+### `POST /addresses/:code/report` — Signaler une adresse (habitant)
+
+- **Auth** : `Authorization: Bearer <jwt habitant>`.
+- **Body** : `{ "message": "La maison a été démolie." }` — `message` **facultatif** (≤ 500 car.).
+- **Réponse 201** : `{ "data": { "reportId": "…", "status": "PENDING" } }`.
+- Le signalement entre dans une file de modération ; **l'historique des signalements n'est jamais exposé publiquement**.
+- **Erreurs** : `404 ADDRESS_NOT_FOUND`, `410 ADDRESS_INACTIVE`.
+
+### `POST /addresses/:code/contribution` — Contribution terrain (habitant)
+
+- **Auth** : `Authorization: Bearer <jwt habitant>`.
+- **Body** : `{ "message": "Sens unique le matin, entrer par le nord." }` — requis, non vide (≤ 1000 car.).
+- **Réponse 201** : `{ "data": { "contributionId": "…", "status": "PENDING" } }`.
+- Une contribution approuvée devient une **note terrain** affichée à part sur la page publique (`fieldNotes`) ; elle **ne modifie jamais** les `steps` du propriétaire.
+- **Erreurs** : `400 CONTRIBUTION_MESSAGE_REQUIRED` (message vide), `404 ADDRESS_NOT_FOUND`, `410 ADDRESS_INACTIVE`.
+
+### Modération (dashboard Modérateur/Admin) — `Authorization: Bearer <jwt mod/admin>`
+
+> Réservé aux rôles `MODERATEUR`/`ADMIN`. Un habitant reçoit `403`.
+
+- **File 1 — Révisions** : `GET /moderation/revisions` · `PATCH /moderation/revisions/:id/approve` · `PATCH /moderation/revisions/:id/reject` (body `{ "reason": "…" }`, obligatoire).
+- **File 2 — Signalements** : `GET /moderation/reports` (chaque item porte `ownerInactiveOver90Days`, aide à la décision) · `PATCH /moderation/reports/:id/resolve` · `PATCH /moderation/reports/:id/deactivate` (body `{ "reason": "…" }` facultatif ; désactive l'adresse signalée → `410` public).
+- **File 3 — Contributions** : `GET /moderation/contributions` · `PATCH /moderation/contributions/:id/approve` (publiée en note terrain) · `PATCH /moderation/contributions/:id/reject`.
 
 <!-- Ajouter ici chaque endpoint au fur et à mesure de son implémentation. -->
