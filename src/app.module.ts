@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AddressesModule } from './addresses/addresses.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { LocalisationsModule } from './localisations/localisations.module';
@@ -13,6 +14,7 @@ import { QuartiersModule } from './quartiers/quartiers.module';
     AuthModule,
     QuartiersModule,
     LocalisationsModule,
+    AddressesModule,
     HealthModule,
   ],
 })
