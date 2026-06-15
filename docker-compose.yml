@@ -1,0 +1,29 @@
+# Environnement de développement local — PostgreSQL 16.
+# Usage :
+#   docker compose up -d
+#   npx prisma migrate deploy        # applique les migrations sur adressebj
+#   (la base de test adressebj_test est créée automatiquement au 1er démarrage)
+#
+# Identifiants de DEV uniquement (jamais en production). DATABASE_URL local :
+#   postgresql://postgres:postgres@localhost:5432/adressebj?schema=public
+services:
+  postgres:
+    image: postgres:16
+    container_name: adressebj-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: adressebj
+    ports:
+      - '5432:5432'
+    volumes:
+      - adressebj-pgdata:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  adressebj-pgdata:
