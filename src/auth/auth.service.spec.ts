@@ -80,9 +80,9 @@ describe('AuthService', () => {
 
     it('refuse si le numéro est déjà associé à un compte vivant (409)', async () => {
       prisma.user.findUnique.mockResolvedValue({ ...baseUser });
-      await expect(service.requestOtp({ phone: '+22997000000' })).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.requestOtp({ phone: '+22997000000' }),
+      ).rejects.toThrow(ConflictException);
       expect(prisma.otpCode.create).not.toHaveBeenCalled();
     });
 
@@ -92,9 +92,9 @@ describe('AuthService', () => {
         deletedAt: new Date(),
       });
       prisma.otpCode.create.mockResolvedValue({});
-      await expect(service.requestOtp({ phone: '+22997000000' })).resolves.toEqual(
-        { sent: true },
-      );
+      await expect(
+        service.requestOtp({ phone: '+22997000000' }),
+      ).resolves.toEqual({ sent: true });
     });
   });
 
@@ -126,7 +126,9 @@ describe('AuthService', () => {
 
     it('rejette un OTP invalide ou expiré (401)', async () => {
       prisma.otpCode.findFirst.mockResolvedValue(null);
-      await expect(service.register(dto)).rejects.toThrow(UnauthorizedException);
+      await expect(service.register(dto)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('rejette un email déjà utilisé (409)', async () => {
@@ -156,7 +158,10 @@ describe('AuthService', () => {
         ...baseUser,
         password: passwordHash,
       });
-      prisma.user.update.mockResolvedValue({ ...baseUser, password: passwordHash });
+      prisma.user.update.mockResolvedValue({
+        ...baseUser,
+        password: passwordHash,
+      });
 
       const res = await service.login({
         phone: '+22997000000',

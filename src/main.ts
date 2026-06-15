@@ -34,7 +34,9 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('AdresseBJ API')
-    .setDescription("API REST d'AdresseBJ — infrastructure d'adressage numérique du Bénin")
+    .setDescription(
+      "API REST d'AdresseBJ — infrastructure d'adressage numérique du Bénin",
+    )
     .setVersion('0.1.0')
     .addBearerAuth()
     .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'api-key')

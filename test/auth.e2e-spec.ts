@@ -27,7 +27,11 @@ describe('Auth (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
@@ -74,7 +78,12 @@ describe('Auth (e2e)', () => {
   it('register échoue avec un OTP invalide (401)', async () => {
     const res = await http()
       .post('/api/auth/register')
-      .send({ phone: '+22998000000', code: '000000', email: 'nobody@example.com', password })
+      .send({
+        phone: '+22998000000',
+        code: '000000',
+        email: 'nobody@example.com',
+        password,
+      })
       .expect(401);
     expect(res.body.code).toBe('OTP_INVALID');
   });

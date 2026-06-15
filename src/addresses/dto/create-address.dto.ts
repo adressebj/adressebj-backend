@@ -22,7 +22,10 @@ export class CreateAddressDto {
   @IsEnum(AddressCategory)
   category!: AddressCategory;
 
-  @ApiProperty({ type: [String], description: "Étapes d'accès (assemblées côté serveur)" })
+  @ApiProperty({
+    type: [String],
+    description: "Étapes d'accès (assemblées côté serveur)",
+  })
   @IsArray()
   @ArrayMinSize(1, { message: 'Au moins une étape est requise.' })
   @ArrayMaxSize(20)
@@ -31,7 +34,10 @@ export class CreateAddressDto {
   steps!: string[];
 
   @ApiProperty({ example: 'https://res.cloudinary.com/.../photo.jpg' })
-  @IsUrl({ require_protocol: true }, { message: 'photoUrl doit être une URL valide.' })
+  @IsUrl(
+    { require_protocol: true },
+    { message: 'photoUrl doit être une URL valide.' },
+  )
   photoUrl!: string;
 
   @ApiProperty({ example: 6.3662 })

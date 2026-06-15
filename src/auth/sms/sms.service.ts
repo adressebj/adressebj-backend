@@ -16,7 +16,7 @@ export class SmsService {
   constructor(private readonly config: ConfigService) {
     this.enabled = Boolean(
       this.config.get<string>('AT_API_KEY') &&
-        this.config.get<string>('AT_USERNAME'),
+      this.config.get<string>('AT_USERNAME'),
     );
   }
 

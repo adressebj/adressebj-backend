@@ -15,7 +15,9 @@ describe('Health (e2e)', () => {
 
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
@@ -26,7 +28,9 @@ describe('Health (e2e)', () => {
   });
 
   it('GET /api/health → 200, enveloppe { data, meta }', async () => {
-    const res = await request(app.getHttpServer()).get('/api/health').expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/api/health')
+      .expect(200);
     expect(res.body.data.status).toBe('ok');
     expect(res.body.meta.timestamp).toBeDefined();
   });

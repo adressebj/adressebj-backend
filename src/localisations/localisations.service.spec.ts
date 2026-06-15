@@ -28,7 +28,18 @@ describe('LocalisationsService', () => {
       prisma.quartier.findMany.mockResolvedValue([
         {
           id: 'q-poly',
-          polygon: { type: 'Polygon', coordinates: [[[2, 6], [2, 7], [3, 7], [3, 6], [2, 6]]] },
+          polygon: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [2, 6],
+                [2, 7],
+                [3, 7],
+                [3, 6],
+                [2, 6],
+              ],
+            ],
+          },
           centerLat: 6.5,
           centerLng: 2.5,
         },
@@ -70,11 +81,11 @@ describe('LocalisationsService', () => {
         { id: 'loc-1', gpsLat: 6.366, gpsLng: 2.444, quartierId: 'q1' },
       ]);
       prisma.quartier.findMany.mockResolvedValue([
-        { id: 'q-near', polygon: null, centerLat: 6.40, centerLng: 2.40 },
+        { id: 'q-near', polygon: null, centerLat: 6.4, centerLng: 2.4 },
       ]);
       prisma.localisation.create.mockResolvedValue({ id: 'loc-new' });
 
-      const loc = await service.resolveOrCreate(6.40, 2.40);
+      const loc = await service.resolveOrCreate(6.4, 2.4);
       expect(loc.id).toBe('loc-new');
       expect(prisma.localisation.create).toHaveBeenCalledWith({
         data: { quartierId: 'q-near', gpsLat: 6.4, gpsLng: 2.4 },

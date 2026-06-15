@@ -55,7 +55,11 @@ describe('Moderation revisions (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
@@ -65,8 +69,18 @@ describe('Moderation revisions (e2e)', () => {
     await cleanup();
     await prisma.quartier.createMany({
       data: [
-        { name: 'Mod A', prefix: prefixes[0], centerLat: gpsA.gpsLat, centerLng: gpsA.gpsLng },
-        { name: 'Mod B', prefix: prefixes[1], centerLat: gpsB.gpsLat, centerLng: gpsB.gpsLng },
+        {
+          name: 'Mod A',
+          prefix: prefixes[0],
+          centerLat: gpsA.gpsLat,
+          centerLng: gpsA.gpsLng,
+        },
+        {
+          name: 'Mod B',
+          prefix: prefixes[1],
+          centerLat: gpsB.gpsLat,
+          centerLng: gpsB.gpsLng,
+        },
       ],
     });
 
@@ -104,7 +118,10 @@ describe('Moderation revisions (e2e)', () => {
   const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   it('la file de modération est interdite à un habitant (403)', async () => {
-    await http().get('/api/moderation/revisions').set(auth(habToken)).expect(403);
+    await http()
+      .get('/api/moderation/revisions')
+      .set(auth(habToken))
+      .expect(403);
   });
 
   it('approbation : révision n°1 → PUBLIEE et pointeur basculé', async () => {
@@ -119,7 +136,9 @@ describe('Moderation revisions (e2e)', () => {
       .get('/api/moderation/revisions')
       .set(auth(modToken))
       .expect(200);
-    const item = queue.body.data.find((r: { addressCode: string }) => r.addressCode === code);
+    const item = queue.body.data.find(
+      (r: { addressCode: string }) => r.addressCode === code,
+    );
     expect(item).toBeTruthy();
     expect(item.isFirstPublication).toBe(true);
 
