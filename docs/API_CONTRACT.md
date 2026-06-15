@@ -29,6 +29,9 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `INVALID_RATING` | 400 | Note d'évaluation hors de l'intervalle entier 1–5. |
 | `CONTRIBUTION_MESSAGE_REQUIRED` | 400 | Message de contribution vide. |
 | `ACCOUNT_NOT_ACTIVE` | 401 | Compte suspendu ou désactivé (rejet à l'authentification). |
+| `NOT_ADDRESS_OWNER` | 403 | Action d'administration sur une adresse dont on n'est pas propriétaire. |
+| `REVISION_ALREADY_PENDING` | 409 | Une modification est déjà en attente de validation pour cette adresse. |
+| `ADDRESS_ALREADY_DEACTIVATED` | 409 | Adresse déjà désactivée (modification/désactivation impossible). |
 | … | … | _(compléter au fil des endpoints)_ |
 
 ## Comportements spéciaux à connaître
@@ -130,6 +133,29 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 - **Réponse 201** : `{ "data": { "contributionId": "…", "status": "PENDING" } }`.
 - Une contribution approuvée devient une **note terrain** affichée à part sur la page publique (`fieldNotes`) ; elle **ne modifie jamais** les `steps` du propriétaire.
 - **Erreurs** : `400 CONTRIBUTION_MESSAGE_REQUIRED` (message vide), `404 ADDRESS_NOT_FOUND`, `410 ADDRESS_INACTIVE`.
+
+### `PATCH /addresses/:code` — Modifier une adresse (propriétaire)
+
+- **Auth** : `Authorization: Bearer <jwt propriétaire>`.
+- **Body** : `{ "category": "COMMERCE", "steps": ["…"], "photoUrl": "https://…" }`. **Le GPS n'est pas modifiable** (la position d'une adresse est figée).
+- **Réponse 200** : `{ "data": { "code": "…", "revisionStatus": "EN_ATTENTE_VALIDATION", "published": true } }`.
+- La modification crée une **nouvelle version** soumise à validation. **Tant qu'elle n'est pas approuvée, le public continue de voir l'ancienne version** ; le code ne change jamais.
+- **Erreurs** : `404 ADDRESS_NOT_FOUND`, `403 NOT_ADDRESS_OWNER`, `409 REVISION_ALREADY_PENDING` (une modif est déjà en attente), `409 ADDRESS_ALREADY_DEACTIVATED`.
+
+### `PATCH /addresses/:code/discoverable` — Découverte cartographique (propriétaire)
+
+- **Auth** : `Authorization: Bearer <jwt propriétaire>`.
+- **Body** : `{ "discoverable": false }`.
+- **Réponse 200** : `{ "data": { "code": "…", "mapDiscoverable": false } }`.
+- `mapDiscoverable = false` retire l'adresse de la carte browsable (`/map/addresses`) ; sa résolution par code reste possible.
+- **Erreurs** : `404 ADDRESS_NOT_FOUND`, `403 NOT_ADDRESS_OWNER`, `409 ADDRESS_ALREADY_DEACTIVATED`.
+
+### `DELETE /addresses/:code` — Désactiver une adresse (propriétaire)
+
+- **Auth** : `Authorization: Bearer <jwt propriétaire>`.
+- **Réponse 200** : `{ "data": { "code": "…", "lifecycle": "DESACTIVEE" } }`.
+- Désactivation **définitive** (le code n'est jamais réattribué) : l'adresse renvoie ensuite `410` en public/API. Une éventuelle modification en attente sort de la file.
+- **Erreurs** : `404 ADDRESS_NOT_FOUND`, `403 NOT_ADDRESS_OWNER`, `409 ADDRESS_ALREADY_DEACTIVATED`.
 
 ### Modération (dashboard Modérateur/Admin) — `Authorization: Bearer <jwt mod/admin>`
 

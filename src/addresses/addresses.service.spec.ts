@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   GoneException,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,8 +16,13 @@ function buildPrismaMock() {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
-    addressRevision: { create: jest.fn() },
+    addressRevision: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
+    },
     quartier: { findUniqueOrThrow: jest.fn() },
     contribution: { findMany: jest.fn() },
     rating: { aggregate: jest.fn(), upsert: jest.fn() },
@@ -35,13 +41,16 @@ const dto = {
 
 describe('AddressesService', () => {
   let prisma: ReturnType<typeof buildPrismaMock>;
-  let localisations: { resolveOrCreate: jest.Mock };
+  let localisations: { resolveOrCreate: jest.Mock; cleanupIfEmpty: jest.Mock };
   let apiKeys: { logRequest: jest.Mock };
   let service: AddressesService;
 
   beforeEach(() => {
     prisma = buildPrismaMock();
-    localisations = { resolveOrCreate: jest.fn() };
+    localisations = {
+      resolveOrCreate: jest.fn(),
+      cleanupIfEmpty: jest.fn().mockResolvedValue(undefined),
+    };
     apiKeys = { logRequest: jest.fn().mockResolvedValue(undefined) };
     service = new AddressesService(
       prisma as never,
@@ -366,6 +375,148 @@ describe('AddressesService', () => {
       });
       const res = await service.resolvePublishedAddress('AKP-7X3K');
       expect(res).toEqual({ id: 'addr-1', code: 'AKP-7X3K', ownerId: 'owner-9' });
+    });
+  });
+
+  const ownedAddress = {
+    id: 'addr-1',
+    code: 'AKP-7X3K',
+    userId: 'owner-1',
+    lifecycle: 'ACTIVE',
+    publishedRevisionId: 'rev-1',
+    mapDiscoverable: true,
+    localisationId: 'loc-1',
+    localisation: { gpsLat: 6.3676, gpsLng: 2.4252 },
+  };
+
+  const updateDto = {
+    category: AddressCategory.COMMERCE,
+    steps: ['Nouveau repère', 'Portail vert'],
+    photoUrl: 'https://example.com/new.jpg',
+  };
+
+  describe('update', () => {
+    it('crée une nouvelle révision EN_ATTENTE (GPS = localisation), pointeur inchangé', async () => {
+      prisma.address.findUnique.mockResolvedValue(ownedAddress);
+      prisma.addressRevision.findFirst.mockResolvedValue(null);
+      prisma.addressRevision.create.mockResolvedValue({ id: 'rev-2' });
+
+      const res = await service.update('owner-1', 'AKP-7X3K', updateDto);
+
+      expect(res).toEqual({
+        code: 'AKP-7X3K',
+        revisionStatus: RevisionStatus.EN_ATTENTE_VALIDATION,
+        published: true,
+      });
+      expect(prisma.addressRevision.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          addressId: 'addr-1',
+          assembledText: 'Nouveau repère. Portail vert.',
+          gpsLat: 6.3676,
+          gpsLng: 2.4252,
+          status: RevisionStatus.EN_ATTENTE_VALIDATION,
+        }),
+      });
+      expect(prisma.address.update).not.toHaveBeenCalled();
+    });
+
+    it('409 si une révision est déjà en attente', async () => {
+      prisma.address.findUnique.mockResolvedValue(ownedAddress);
+      prisma.addressRevision.findFirst.mockResolvedValue({ id: 'rev-pending' });
+      await expect(
+        service.update('owner-1', 'AKP-7X3K', updateDto),
+      ).rejects.toMatchObject({ response: { code: 'REVISION_ALREADY_PENDING' } });
+      expect(prisma.addressRevision.create).not.toHaveBeenCalled();
+    });
+
+    it('403 si l’appelant n’est pas le propriétaire', async () => {
+      prisma.address.findUnique.mockResolvedValue(ownedAddress);
+      await expect(
+        service.update('intrus-9', 'AKP-7X3K', updateDto),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('404 si l’adresse n’existe pas', async () => {
+      prisma.address.findUnique.mockResolvedValue(null);
+      await expect(
+        service.update('owner-1', 'XXX-0000', updateDto),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('409 si l’adresse est désactivée', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        ...ownedAddress,
+        lifecycle: 'DESACTIVEE',
+      });
+      await expect(
+        service.update('owner-1', 'AKP-7X3K', updateDto),
+      ).rejects.toMatchObject({ response: { code: 'ADDRESS_ALREADY_DEACTIVATED' } });
+    });
+  });
+
+  describe('setDiscoverable', () => {
+    it('bascule mapDiscoverable du propriétaire', async () => {
+      prisma.address.findUnique.mockResolvedValue(ownedAddress);
+      prisma.address.update.mockResolvedValue({
+        code: 'AKP-7X3K',
+        mapDiscoverable: false,
+      });
+      const res = await service.setDiscoverable('owner-1', 'AKP-7X3K', false);
+      expect(res).toEqual({ code: 'AKP-7X3K', mapDiscoverable: false });
+      expect(prisma.address.update).toHaveBeenCalledWith({
+        where: { id: 'addr-1' },
+        data: { mapDiscoverable: false },
+      });
+    });
+
+    it('403 pour un non-propriétaire', async () => {
+      prisma.address.findUnique.mockResolvedValue(ownedAddress);
+      await expect(
+        service.setDiscoverable('intrus-9', 'AKP-7X3K', false),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('deactivate', () => {
+    it('désactive, périme la révision en attente et nettoie la localisation', async () => {
+      prisma.address.findUnique.mockResolvedValue(ownedAddress);
+      const addrUpdate = jest.fn().mockResolvedValue({});
+      const revUpdateMany = jest.fn().mockResolvedValue({});
+      prisma.$transaction.mockImplementation(async (cb: any) =>
+        cb({
+          address: { update: addrUpdate },
+          addressRevision: { updateMany: revUpdateMany },
+        }),
+      );
+
+      const res = await service.deactivate('owner-1', 'AKP-7X3K');
+
+      expect(res).toEqual({ code: 'AKP-7X3K', lifecycle: 'DESACTIVEE' });
+      expect(addrUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'addr-1' },
+          data: expect.objectContaining({
+            lifecycle: 'DESACTIVEE',
+            deactivatedById: 'owner-1',
+          }),
+        }),
+      );
+      expect(revUpdateMany).toHaveBeenCalledWith({
+        where: { addressId: 'addr-1', status: RevisionStatus.EN_ATTENTE_VALIDATION },
+        data: { status: RevisionStatus.OBSOLETE },
+      });
+      expect(localisations.cleanupIfEmpty).toHaveBeenCalledWith('loc-1');
+    });
+
+    it('409 si déjà désactivée', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        ...ownedAddress,
+        lifecycle: 'DESACTIVEE',
+      });
+      await expect(service.deactivate('owner-1', 'AKP-7X3K')).rejects.toMatchObject(
+        { response: { code: 'ADDRESS_ALREADY_DEACTIVATED' } },
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });
