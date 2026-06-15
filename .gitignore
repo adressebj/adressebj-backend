@@ -25,3 +25,17 @@ lerna-debug.log*
 
 # Agents
 /AGENTS.md
+
+# Documentations et Schémas
+AdresseBJ_CdC_Backend.md
+AdresseBJ_CdC_Frontend.md
+Cahier_De_Charge_AdresseBJ_v5.md
+# Docs internes locales (DECISIONS, USER_ACTIONS, DEPLOYMENT, API_POSTMAN…),
+# SAUF le contrat Postman et le contrat frontend, qui eux sont versionnés.
+docs/*
+!docs/API_CONTRACT.md
+!docs/postman/
+docs/postman/*
+!docs/postman/AdresseBJ.postman_collection.json
+!docs/postman/AdresseBJ.postman_environment.json
+CLAUDE.md

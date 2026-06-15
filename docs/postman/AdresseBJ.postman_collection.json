@@ -1,0 +1,48 @@
+{
+  "info": {
+    "name": "AdresseBJ — Backend API",
+    "description": "Collection vivante de l'API AdresseBJ. À maintenir en synchro stricte avec l'API réelle (cf. docs/API_POSTMAN.md). Variables d'environnement : baseUrl, jwt, jwtMod, apiKey.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": []
+    },
+    {
+      "name": "Addresses",
+      "item": []
+    },
+    {
+      "name": "Map",
+      "item": []
+    },
+    {
+      "name": "Visits",
+      "item": []
+    },
+    {
+      "name": "Moderation",
+      "item": []
+    },
+    {
+      "name": "Admin",
+      "item": []
+    },
+    {
+      "name": "Quartiers",
+      "item": []
+    },
+    {
+      "name": "Notifications",
+      "item": []
+    },
+    {
+      "name": "Upload",
+      "item": []
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api" }
+  ]
+}

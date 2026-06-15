@@ -1,0 +1,376 @@
+// prisma/schema.prisma — AdresseBJ · MLD consolidé (post-revue de modèle)
+//
+// Décisions intégrées (voir tags "← #x" en fin de ligne) :
+//   versioning  : Address (contenu vivant) + AddressRevision (contenu candidat en re-validation)
+//   #2          : suppression de localisation -> localisationId nullable + onDelete SetNull + CHECK
+//   #3          : lastSessionAt déplacé de Address vers User
+//   #G          : index redondants supprimés (Address.code, ApiKey.key)
+//   #A          : modèle Notification (journal habitant) — distinct de PushSubscription (transport)
+//   #F          : modèle ApiRequestLog (couche métering) — calcul du ratio de remontée
+//   #E          : suppression de compte = pierre tombale anonymisée (User.deletedAt, jamais de hard-delete)
+//   #J          : audit de modération en ligne (reviewedById / deactivatedById)
+//   #H          : Visit.source supprimé (la nullité de apiKeyId EST la source)
+//
+// Contraintes hors-DSL : voir prisma/migrations/manual/constraints.sql
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Utilisateurs ─────────────────────────────────────────────────────────────
+
+model User {
+  id              String     @id @default(cuid())
+  phone           String?    @unique   // Habitant : identifiant de connexion (+ OTP à l'inscription). Nullable = tombstone (#E)
+  email           String?    @unique   // Modérateur/Admin : identifiant de connexion. Habitant : obligatoire à la création (invariante OCL), nullable = tombstone
+  password        String?              // bcrypt — TOUS les rôles. Nullable = tombstone (#E) ; obligatoire à la création
+  firstName       String?
+  lastName        String?
+  role            Role       @default(HABITANT)
+  status          UserStatus @default(ACTIVE)
+  suspendedReason String?
+  lastSessionAt   DateTime?            // ← #3 : déplacé depuis Address (MAJ à chaque auth réussie)
+  deletedAt       DateTime?            // ← #E : pierre tombale anonymisée (jamais de hard-delete)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  addresses             Address[]         @relation("AddressOwner")
+  otpCodes              OtpCode[]
+  ratings               Rating[]
+  reports               Report[]          @relation("ReportAuthor")
+  contributions         Contribution[]    @relation("ContributionAuthor")
+  pushSubscriptions     PushSubscription[]
+  notifications         Notification[]                                   // ← #A
+
+  reviewedReports       Report[]          @relation("ReportReviewer")      // ┐ audit
+  reviewedContributions Contribution[]    @relation("ContributionReviewer")// │ modération
+  reviewedRevisions     AddressRevision[] @relation("RevisionReviewer")    // ┘ (#J)
+  deactivatedAddresses  Address[]         @relation("AddressDeactivator")  // désactivation d'entité
+}
+
+enum Role {
+  HABITANT
+  MODERATEUR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED // habitant suspendu par un admin (durée indéterminée)
+  DEACTIVATED // compte modérateur désactivé par un admin (réactivable)
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String?
+
+  @@index([phone])
+}
+
+// ─── Quartiers ────────────────────────────────────────────────────────────────
+// Correspond au « quartier de ville », dernier niveau du découpage béninois
+// (Département → Commune → Arrondissement → Quartier). polygon optionnel : OSM
+// fournit souvent un simple point central, pas une frontière (cf. règle de
+// rattachement « quartier le plus proche » dans constraints.sql / cahiers).
+
+model Quartier {
+  id        String   @id @default(cuid())
+  name      String
+  prefix    String   @unique
+  polygon   Json?    // GeoJSON ; null si OSM ne fournit qu'un point (centerLat/centerLng servent alors au rattachement)
+  centerLat Float?   // centre du quartier (point OSM ou barycentre) — repli de rattachement sans polygone
+  centerLng Float?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  localisations Localisation[]
+}
+
+// ─── Localisations (point physique partagé) ───────────────────────────────────
+
+model Localisation {
+  id          String   @id @default(cuid())
+  quartierId  String              // déterminé À LA CRÉATION de la localisation (point-dans-polygone, ou quartier le plus proche si pas de polygone)
+  gpsLat      Float // figées par le premier créateur, immuables
+  gpsLng      Float
+  createdAt   DateTime @default(now())
+
+  quartier  Quartier  @relation(fields: [quartierId], references: [id])
+  addresses Address[]
+
+  @@index([quartierId])
+  // Recherche par rayon : filtrage applicatif (prototype) — ST_DWithin/PostGIS en prod.
+}
+
+// ─── Adresses (identité stable + pointeur vers la version publiée) ────────────
+// Décision A : le contenu (catégorie, steps, photo, GPS) ne vit PAS ici mais
+// dans AddressRevision. Address ne porte que l'identité permanente et le
+// cycle de vie de l'entité (ACTIVE / DESACTIVEE). La première publication
+// comme les modifications sont des révisions — un seul mécanisme, une seule file.
+
+model Address {
+  id                  String           @id @default(cuid())
+  code                String           @unique          // identité permanente, jamais réattribuée
+  localisationId      String? // ← #2 : nullable, réservé aux DESACTIVEE (CHECK)
+  userId              String
+  lifecycle           AddressLifecycle @default(ACTIVE)  // cycle de vie de l'ENTITÉ
+  publishedRevisionId String?          @unique           // révision actuellement publique (null = jamais publiée)
+  mapDiscoverable     Boolean          @default(true)
+  deactivatedAt       DateTime?
+  deactivatedById     String? // ← #J : acteur désactivation (≠ userId ⇒ modération)
+  deactivationReason  String? // ← #J : motif (optionnel ; aussi dans la notif)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  localisation      Localisation?     @relation(fields: [localisationId], references: [id], onDelete: SetNull) // ← #2
+  user              User              @relation("AddressOwner", fields: [userId], references: [id])
+  deactivatedBy     User?             @relation("AddressDeactivator", fields: [deactivatedById], references: [id])
+  publishedRevision AddressRevision?  @relation("PublishedRevision", fields: [publishedRevisionId], references: [id])
+  revisions         AddressRevision[] @relation("AddressRevisions")
+  visits            Visit[]
+  ratings           Rating[]
+  reports           Report[]
+  contributions     Contribution[]
+  notifications     Notification[] // ← #A
+
+  @@unique([userId, localisationId])
+  @@index([localisationId])
+  @@index([lifecycle])
+  // @@index([code]) non requis — ← #G (redondant avec @unique)
+}
+
+enum AddressLifecycle {
+  ACTIVE
+  DESACTIVEE
+}
+
+enum AddressCategory {
+  DOMICILE
+  COMMERCE
+  RESTAURATION
+  SANTE
+  EDUCATION
+  ADMINISTRATION
+  LOISIR
+  AUTRE
+}
+
+// ─── Révisions d'adresse (unique porteur du contenu, versionné) ───────────────
+// La 1re publication = révision n°1. Le pointeur Address.publishedRevisionId ne
+// bascule qu'à l'APPROBATION : pendant une re-validation, l'ancienne version
+// reste publique. Un rejet ne touche jamais le pointeur.
+
+model AddressRevision {
+  id              String          @id @default(cuid())
+  addressId       String
+  category        AddressCategory // ┐
+  steps           Json //            │ contenu VERSIONNÉ
+  assembledText   String //          │ (string[] assemblé)
+  photoUrl        String //          │
+  gpsLat          Float //           │ GPS porté par cette version
+  gpsLng          Float //           ┘ (sert au rattachement ; la NAV utilise le GPS Localisation)
+  status          RevisionStatus  @default(EN_ATTENTE_VALIDATION)
+  rejectionReason String? // obligatoire si REJETEE (CHECK constraints.sql)
+  reviewedById    String? // ← #J : modérateur ayant statué
+  reviewedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt // éditable tant qu'EN_ATTENTE_VALIDATION
+
+  address      Address  @relation("AddressRevisions", fields: [addressId], references: [id])
+  publishedFor Address? @relation("PublishedRevision")                 // back-relation du pointeur
+  reviewedBy   User?    @relation("RevisionReviewer", fields: [reviewedById], references: [id])
+
+  @@index([addressId])
+  @@index([status])
+  // unicité « ≤ 1 révision EN_ATTENTE_VALIDATION par adresse » → index partiel SQL (constraints.sql)
+}
+
+enum RevisionStatus {
+  EN_ATTENTE_VALIDATION
+  PUBLIEE
+  REJETEE     // décision de modération : exige reviewedById + rejectionReason
+  OBSOLETE    // terminal non-décisionnel : auteur disparu (suppression compte) OU adresse parente désactivée
+}
+
+// ─── Visites ─────────────────────────────────────────────────────────────────
+
+model Visit {
+  id         String    @id @default(cuid())
+  addressId  String
+  departAt   DateTime
+  arrivedAt  DateTime?
+  apiKeyId   String? // ← #H : la nullité EST la source (web ⟺ null, API ⟺ non-null)
+  finalPrice Float?
+  corridor   Json?
+  createdAt  DateTime  @default(now())
+
+  address Address @relation(fields: [addressId], references: [id])
+  apiKey  ApiKey? @relation(fields: [apiKeyId], references: [id])
+
+  @@index([addressId])
+}
+
+// enum VisitSource supprimé — ← #H
+
+// ─── Évaluations ──────────────────────────────────────────────────────────────
+
+model Rating {
+  id        String   @id @default(cuid())
+  addressId String
+  userId    String
+  stars     Int // 1..5
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  address Address @relation(fields: [addressId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, addressId])
+  @@index([addressId])
+}
+
+// ─── Signalements ─────────────────────────────────────────────────────────────
+
+model Report {
+  id           String       @id @default(cuid())
+  addressId    String
+  userId       String
+  message      String?
+  status       ReportStatus @default(PENDING)
+  reviewedById String? // ← #J
+  reviewedAt   DateTime?
+  createdAt    DateTime     @default(now())
+
+  address  Address @relation(fields: [addressId], references: [id])
+  user     User    @relation("ReportAuthor", fields: [userId], references: [id])
+  reviewer User?   @relation("ReportReviewer", fields: [reviewedById], references: [id])
+
+  @@index([addressId])
+  @@index([status])
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  ACTIONED
+}
+
+// ─── Clés API ────────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id        String       @id @default(cuid())
+  key       String       @unique
+  label     String
+  status    ApiKeyStatus @default(ACTIVE)
+  expiresAt DateTime?
+  createdAt DateTime     @default(now())
+  revokedAt DateTime?
+
+  visits      Visit[]
+  requestLogs ApiRequestLog[] // ← #F
+
+  // @@index([key]) supprimé — ← #G (redondant avec @unique)
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
+// ─── Journal d'appels API (couche métering — ratio de remontée) ────────── ← #F
+
+model ApiRequestLog {
+  id        String      @id @default(cuid())
+  apiKeyId  String
+  endpoint  ApiEndpoint
+  createdAt DateTime    @default(now())
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id])
+
+  @@index([apiKeyId, endpoint, createdAt])
+}
+
+enum ApiEndpoint {
+  RESOLVE
+  VERIFY
+  ETA
+  CONFIRM
+  ANALYTICS
+}
+
+// ─── Contributions terrain ────────────────────────────────────────────────────
+
+model Contribution {
+  id           String             @id @default(cuid())
+  addressId    String
+  userId       String
+  message      String
+  status       ContributionStatus @default(PENDING)
+  reviewedById String? // ← #J
+  reviewedAt   DateTime?
+  createdAt    DateTime           @default(now())
+
+  address  Address @relation(fields: [addressId], references: [id])
+  user     User    @relation("ContributionAuthor", fields: [userId], references: [id])
+  reviewer User?   @relation("ContributionReviewer", fields: [reviewedById], references: [id])
+
+  @@index([addressId])
+  @@index([status])
+}
+
+enum ContributionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Souscriptions push (transport Web Push) ─────────────────────────────────
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ─── Notifications (journal habitant — distinct du transport push) ──────── ← #A
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  message   String // texte rendu (fr) — == ce qui a été poussé
+  addressId String? // adresse concernée le cas échéant
+  readAt    DateTime? // null = non lue
+  createdAt DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address Address? @relation(fields: [addressId], references: [id], onDelete: SetNull) // ← #4
+
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  ADDRESS_VALIDATED
+  ADDRESS_REJECTED
+  RELIABILITY_WARNING
+  ADDRESS_DEACTIVATED
+}
