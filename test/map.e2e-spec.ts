@@ -47,7 +47,12 @@ describe('Map browsable layer (e2e)', () => {
     const res = await http()
       .post('/api/addresses')
       .set(auth(habToken))
-      .send({ category, steps: ['Repère'], photoUrl: 'https://example.com/p.jpg', ...gps })
+      .send({
+        category,
+        steps: ['Repère'],
+        photoUrl: 'https://example.com/p.jpg',
+        ...gps,
+      })
       .expect(201);
     return res.body.data.code as string;
   }
@@ -63,7 +68,9 @@ describe('Map browsable layer (e2e)', () => {
   }
 
   async function cleanup() {
-    await prisma.addressRevision.deleteMany({ where: { address: { user: { phone } } } });
+    await prisma.addressRevision.deleteMany({
+      where: { address: { user: { phone } } },
+    });
     await prisma.address.deleteMany({ where: { user: { phone } } });
     await prisma.localisation.deleteMany({ where: { quartier: { prefix } } });
     await prisma.otpCode.deleteMany({ where: { phone } });
@@ -79,7 +86,11 @@ describe('Map browsable layer (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());

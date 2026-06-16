@@ -37,7 +37,10 @@ describe('Reports & contributions (e2e)', () => {
     ...gps,
   });
 
-  async function publish(gps: { gpsLat: number; gpsLng: number }): Promise<string> {
+  async function publish(gps: {
+    gpsLat: number;
+    gpsLng: number;
+  }): Promise<string> {
     const created = await http()
       .post('/api/addresses')
       .set(auth(habToken))
@@ -57,7 +60,9 @@ describe('Reports & contributions (e2e)', () => {
   async function cleanup() {
     await prisma.report.deleteMany({ where: { user: { phone } } });
     await prisma.contribution.deleteMany({ where: { user: { phone } } });
-    await prisma.addressRevision.deleteMany({ where: { address: { user: { phone } } } });
+    await prisma.addressRevision.deleteMany({
+      where: { address: { user: { phone } } },
+    });
     await prisma.address.deleteMany({ where: { user: { phone } } });
     await prisma.localisation.deleteMany({ where: { quartier: { prefix } } });
     await prisma.otpCode.deleteMany({ where: { phone } });
@@ -73,7 +78,11 @@ describe('Reports & contributions (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
@@ -82,7 +91,12 @@ describe('Reports & contributions (e2e)', () => {
 
     await cleanup();
     await prisma.quartier.create({
-      data: { name: 'Test RC', prefix, centerLat: gpsA.gpsLat, centerLng: gpsA.gpsLng },
+      data: {
+        name: 'Test RC',
+        prefix,
+        centerLat: gpsA.gpsLat,
+        centerLng: gpsA.gpsLng,
+      },
     });
 
     await http().post('/api/auth/request-otp').send({ phone });
@@ -169,7 +183,9 @@ describe('Reports & contributions (e2e)', () => {
         .send({ message: 'Frauduleuse' })
         .expect(201);
       const res = await http()
-        .patch(`/api/moderation/reports/${created.body.data.reportId}/deactivate`)
+        .patch(
+          `/api/moderation/reports/${created.body.data.reportId}/deactivate`,
+        )
         .set(auth(modToken))
         .send({ reason: 'Adresse frauduleuse' })
         .expect(200);
@@ -178,7 +194,9 @@ describe('Reports & contributions (e2e)', () => {
         addressDeactivated: true,
       });
 
-      const address = await prisma.address.findUnique({ where: { code: codeA } });
+      const address = await prisma.address.findUnique({
+        where: { code: codeA },
+      });
       expect(address!.lifecycle).toBe('DESACTIVEE');
       expect(address!.deactivationReason).toBe('Adresse frauduleuse');
 
@@ -241,13 +259,17 @@ describe('Reports & contributions (e2e)', () => {
         .send({ message: 'Information erronée à rejeter' })
         .expect(201);
       await http()
-        .patch(`/api/moderation/contributions/${created.body.data.contributionId}/reject`)
+        .patch(
+          `/api/moderation/contributions/${created.body.data.contributionId}/reject`,
+        )
         .set(auth(modToken))
         .expect(200);
 
       const pub = await http().get(`/api/addresses/${codeB}`).expect(200);
       const notes = pub.body.data.fieldNotes as { message: string }[];
-      expect(notes.some((n) => n.message.startsWith('Information erronée'))).toBe(false);
+      expect(
+        notes.some((n) => n.message.startsWith('Information erronée')),
+      ).toBe(false);
     });
 
     it('un habitant ne peut pas accéder à la file de modération (403)', async () => {

@@ -53,11 +53,19 @@ describe('Ratings & verify (e2e)', () => {
 
   async function cleanup() {
     const phones = [phone, phone2];
-    await prisma.apiRequestLog.deleteMany({ where: { apiKey: { key: apiKeyValue } } });
+    await prisma.apiRequestLog.deleteMany({
+      where: { apiKey: { key: apiKeyValue } },
+    });
     await prisma.apiKey.deleteMany({ where: { key: apiKeyValue } });
-    await prisma.rating.deleteMany({ where: { user: { phone: { in: phones } } } });
-    await prisma.addressRevision.deleteMany({ where: { address: { user: { phone: { in: phones } } } } });
-    await prisma.address.deleteMany({ where: { user: { phone: { in: phones } } } });
+    await prisma.rating.deleteMany({
+      where: { user: { phone: { in: phones } } },
+    });
+    await prisma.addressRevision.deleteMany({
+      where: { address: { user: { phone: { in: phones } } } },
+    });
+    await prisma.address.deleteMany({
+      where: { user: { phone: { in: phones } } },
+    });
     await prisma.localisation.deleteMany({ where: { quartier: { prefix } } });
     await prisma.otpCode.deleteMany({ where: { phone: { in: phones } } });
     await prisma.user.deleteMany({ where: { phone: { in: phones } } });
@@ -72,7 +80,11 @@ describe('Ratings & verify (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
@@ -81,7 +93,12 @@ describe('Ratings & verify (e2e)', () => {
 
     await cleanup();
     await prisma.quartier.create({
-      data: { name: 'Test Rate', prefix, centerLat: gps.gpsLat, centerLng: gps.gpsLng },
+      data: {
+        name: 'Test Rate',
+        prefix,
+        centerLat: gps.gpsLat,
+        centerLng: gps.gpsLng,
+      },
     });
     await prisma.apiKey.create({
       data: { key: apiKeyValue, label: 'E2E rate', status: 'ACTIVE' },
@@ -193,7 +210,10 @@ describe('Ratings & verify (e2e)', () => {
     });
 
     it('rate sans JWT → 401', async () => {
-      await http().post(`/api/addresses/${code}/rate`).send({ stars: 3 }).expect(401);
+      await http()
+        .post(`/api/addresses/${code}/rate`)
+        .send({ stars: 3 })
+        .expect(401);
     });
 
     it('verify (clé API) → 200, moyenne + published + métering VERIFY', async () => {
