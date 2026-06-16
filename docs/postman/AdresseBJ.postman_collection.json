@@ -972,6 +972,35 @@
             },
             "description": "Liste publique des quartiers actifs (id, name, prefix)."
           }
+        },
+        {
+          "name": "Analytics (clé API + quota)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{apiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/quartiers/{{quartierId}}/analytics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "quartiers",
+                "{{quartierId}}",
+                "analytics"
+              ]
+            },
+            "description": "Analytics de quartier (clé API, météré ANALYTICS). Accès conditionné au ratio de remontée CONFIRM/RESOLVE >= 80% sur 30j. Réponse: { quartierId, quartierName, totalVisits, medianEtaMinutes, medianPriceFCFA, peakHours[], successRate, period }. 403 ANALYTICS_QUOTA_INSUFFICIENT si quota insuffisant, 404 QUARTIER_NOT_FOUND, 401 si clé invalide."
+          }
         }
       ]
     },
