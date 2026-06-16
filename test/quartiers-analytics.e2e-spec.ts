@@ -153,13 +153,37 @@ describe('Quartier analytics (e2e)', () => {
     expect(res.body.code).toBe('API_KEY_MISSING');
   });
 
-  it('quota insuffisant (aucune remontée) → 403 ANALYTICS_QUOTA_INSUFFICIENT', async () => {
+  it('aucune remontée (dénominateur nul) → 200 autorisé (cf. #F)', async () => {
+    // Aucun ApiRequestLog encore : resolves = 0 ⇒ accès autorisé, pas de 403.
+    const res = await http()
+      .get(`/api/quartiers/${quartierId}/analytics`)
+      .set(auth(apiKeyValue))
+      .expect(200);
+    expect(res.body.data.quartierId).toBe(quartierId);
+  });
+
+  it('quota insuffisant (ratio bas) → 403 ANALYTICS_QUOTA_INSUFFICIENT', async () => {
+    // 10 RESOLVE, 2 CONFIRM ⇒ 20% < 80%.
+    await prisma.apiRequestLog.createMany({
+      data: [
+        ...Array.from({ length: 10 }, () => ({
+          apiKeyId,
+          endpoint: 'RESOLVE' as const,
+        })),
+        ...Array.from({ length: 2 }, () => ({
+          apiKeyId,
+          endpoint: 'CONFIRM' as const,
+        })),
+      ],
+    });
     const res = await http()
       .get(`/api/quartiers/${quartierId}/analytics`)
       .set(auth(apiKeyValue))
       .expect(403);
     expect(res.body.code).toBe('ANALYTICS_QUOTA_INSUFFICIENT');
-    expect(res.body.message).toContain('0%');
+    expect(res.body.message).toContain('20%');
+    // Remet à zéro le journal pour les phases suivantes.
+    await prisma.apiRequestLog.deleteMany({ where: { apiKeyId } });
   });
 
   it('quartier inconnu → 404 QUARTIER_NOT_FOUND', async () => {
@@ -172,7 +196,8 @@ describe('Quartier analytics (e2e)', () => {
 
   describe('quota satisfait', () => {
     beforeAll(async () => {
-      // Ratio CONFIRM/RESOLVE = 9/10 = 90% ≥ 80%.
+      // Ratio CONFIRM/RESOLVE = 9/10 = 90% ≥ 80% (journal repart propre).
+      await prisma.apiRequestLog.deleteMany({ where: { apiKeyId } });
       await prisma.apiRequestLog.createMany({
         data: [
           ...Array.from({ length: 10 }, () => ({

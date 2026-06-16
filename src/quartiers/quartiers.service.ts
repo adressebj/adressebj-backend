@@ -78,8 +78,10 @@ export class QuartiersService {
       });
     }
 
-    const { ratio } = await this.apiKeys.reportingRatio(apiKeyId);
-    if (ratio < ANALYTICS_RATIO_THRESHOLD) {
+    // Quota de remontée : dénominateur nul (aucune résolution sur 30 j) ⇒ accès
+    // autorisé — aucun trajet pris, donc aucune obligation de remontée (cf. #F).
+    const { ratio, resolves } = await this.apiKeys.reportingRatio(apiKeyId);
+    if (resolves > 0 && ratio < ANALYTICS_RATIO_THRESHOLD) {
       const pct = Math.round(ratio * 100);
       throw new ForbiddenException({
         code: 'ANALYTICS_QUOTA_INSUFFICIENT',
