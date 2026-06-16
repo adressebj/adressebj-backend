@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AddressesModule } from './addresses/addresses.module';
+import { AdminModule } from './admin/admin.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { AuthModule } from './auth/auth.module';
 import { ContributionsModule } from './contributions/contributions.module';
@@ -23,6 +24,7 @@ import { VisitsModule } from './visits/visits.module';
     ContributionsModule,
     ModerationModule,
     VisitsModule,
+    AdminModule,
     HealthModule,
   ],
 })

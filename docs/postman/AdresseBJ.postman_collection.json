@@ -175,6 +175,50 @@
           ]
         },
         {
+          "name": "Login (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@adressebj.bj\",\n  \"password\": \"motdepasse123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Connexion administrateur par email. Capture {{jwtAdmin}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.token) pm.environment.set('jwtAdmin', d.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Update profile (habitant)",
           "request": {
             "method": "PATCH",
@@ -1295,6 +1339,121 @@
               ]
             },
             "description": "Remontée intégrateur (clé bj_live_…). Crée une visite complète + métère CONFIRM."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Routes ADMIN strict (Authorization: Bearer {{jwtAdmin}}).",
+      "item": [
+        {
+          "name": "Create quartier",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Akpakpa\",\n  \"prefix\": \"AKP\",\n  \"centerLat\": 6.3676,\n  \"centerLng\": 2.4252\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/quartiers", "host": ["{{baseUrl}}"], "path": ["admin", "quartiers"] },
+            "description": "Crée un quartier. 409 QUARTIER_PREFIX_TAKEN si le préfixe existe."
+          }
+        },
+        {
+          "name": "Update quartier",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"isActive\": false\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/quartiers/{{quartierId}}", "host": ["{{baseUrl}}"], "path": ["admin", "quartiers", "{{quartierId}}"] },
+            "description": "Modifie / (dés)active un quartier. 404 QUARTIER_NOT_FOUND."
+          }
+        },
+        {
+          "name": "List addresses (supervision)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "url": { "raw": "{{baseUrl}}/admin/addresses?page=1&limit=20", "host": ["{{baseUrl}}"], "path": ["admin", "addresses"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "code", "value": "AKP", "disabled": true }, { "key": "lifecycle", "value": "ACTIVE", "disabled": true }, { "key": "category", "value": "COMMERCE", "disabled": true }, { "key": "quartierId", "value": "{{quartierId}}", "disabled": true }] },
+            "description": "Supervision du référentiel : filtres + pagination."
+          }
+        },
+        {
+          "name": "Create moderator",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"moderateur@adressebj.bj\",\n  \"password\": \"motdepasse123\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/moderators", "host": ["{{baseUrl}}"], "path": ["admin", "moderators"] },
+            "description": "Crée un compte Modérateur. 409 EMAIL_ALREADY_REGISTERED."
+          }
+        },
+        {
+          "name": "Update moderator (deactivate/reactivate/reset)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"action\": \"reset\",\n  \"password\": \"nouveaupass1\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/moderators/{{moderatorId}}", "host": ["{{baseUrl}}"], "path": ["admin", "moderators", "{{moderatorId}}"] },
+            "description": "action ∈ deactivate|reactivate|reset (password requis si reset). 404 MODERATOR_NOT_FOUND, 400 PASSWORD_REQUIRED."
+          }
+        },
+        {
+          "name": "Suspend user",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Comportement abusif\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/suspend", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "suspend"] },
+            "description": "Suspend un Habitant. 404 USER_NOT_FOUND."
+          }
+        },
+        {
+          "name": "Unsuspend user",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/unsuspend", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "unsuspend"] },
+            "description": "Lève la suspension d'un Habitant."
+          }
+        },
+        {
+          "name": "Create API key",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Yango — production\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/api-keys", "host": ["{{baseUrl}}"], "path": ["admin", "api-keys"] },
+            "description": "Crée une clé API. La clé en clair (bj_live_…) n'est renvoyée qu'ici — capture {{apiKey}}.",
+            "event": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "if (d && d.key) pm.environment.set('apiKey', d.key);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revoke API key",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
+            "url": { "raw": "{{baseUrl}}/admin/api-keys/{{apiKeyId}}", "host": ["{{baseUrl}}"], "path": ["admin", "api-keys", "{{apiKeyId}}"] },
+            "description": "Révoque une clé API. 404 API_KEY_NOT_FOUND."
           }
         }
       ]

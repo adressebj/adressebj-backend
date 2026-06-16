@@ -5,7 +5,12 @@ import { QuartiersService } from './quartiers.service';
 
 function buildPrismaMock() {
   return {
-    quartier: { findMany: jest.fn(), findUnique: jest.fn() },
+    quartier: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
     visit: { findMany: jest.fn() },
   };
 }
@@ -51,6 +56,70 @@ describe('QuartiersService', () => {
       expect(prisma.quartier.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { isActive: true } }),
       );
+    });
+  });
+
+  describe('createQuartier', () => {
+    it('crée un quartier si le préfixe est libre', async () => {
+      prisma.quartier.findUnique.mockResolvedValue(null);
+      prisma.quartier.create.mockImplementation(async ({ data }: any) => ({
+        id: 'q-new',
+        ...data,
+      }));
+      const res = await service.createQuartier({
+        name: 'Akpakpa',
+        prefix: 'AKP',
+      });
+      expect(res).toMatchObject({ id: 'q-new', prefix: 'AKP' });
+      expect(prisma.quartier.create).toHaveBeenCalled();
+    });
+
+    it('refuse un préfixe déjà pris (409)', async () => {
+      prisma.quartier.findUnique.mockResolvedValue({
+        id: 'q-1',
+        prefix: 'AKP',
+      });
+      await expect(
+        service.createQuartier({ name: 'X', prefix: 'AKP' }),
+      ).rejects.toMatchObject({ response: { code: 'QUARTIER_PREFIX_TAKEN' } });
+      expect(prisma.quartier.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateQuartier', () => {
+    it('404 si le quartier est introuvable', async () => {
+      prisma.quartier.findUnique.mockResolvedValue(null);
+      await expect(
+        service.updateQuartier('q-x', { name: 'X' }),
+      ).rejects.toMatchObject({ response: { code: 'QUARTIER_NOT_FOUND' } });
+    });
+
+    it('met à jour les champs fournis (isActive)', async () => {
+      prisma.quartier.findUnique.mockResolvedValue({
+        id: 'q-1',
+        prefix: 'AKP',
+      });
+      prisma.quartier.update.mockImplementation(async ({ data }: any) => ({
+        id: 'q-1',
+        prefix: 'AKP',
+        ...data,
+      }));
+      const res = await service.updateQuartier('q-1', { isActive: false });
+      expect(res.isActive).toBe(false);
+      expect(prisma.quartier.update).toHaveBeenCalledWith({
+        where: { id: 'q-1' },
+        data: { isActive: false },
+      });
+    });
+
+    it('refuse un changement de préfixe vers un préfixe déjà pris (409)', async () => {
+      prisma.quartier.findUnique
+        .mockResolvedValueOnce({ id: 'q-1', prefix: 'AKP' }) // cible
+        .mockResolvedValueOnce({ id: 'q-2', prefix: 'CAD' }); // préfixe pris
+      await expect(
+        service.updateQuartier('q-1', { prefix: 'CAD' }),
+      ).rejects.toMatchObject({ response: { code: 'QUARTIER_PREFIX_TAKEN' } });
+      expect(prisma.quartier.update).not.toHaveBeenCalled();
     });
   });
 
