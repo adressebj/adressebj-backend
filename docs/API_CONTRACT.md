@@ -123,6 +123,29 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 - Conçu pour les cas de vérification (KYC fintech, banques, assurances). `averageRating` à `null` = « aucune évaluation » (à distinguer d'une note basse).
 - **Erreurs** : `404 ADDRESS_NOT_FOUND`, `410 ADDRESS_INACTIVE`, `401 API_KEY_MISSING|API_KEY_INVALID|API_KEY_REVOKED|API_KEY_EXPIRED`.
 
+### `GET /addresses/:code/eta` — Estimation ETA (intégrateurs, clé API)
+
+- **Auth** : `Authorization: Bearer bj_live_…` (clé API). Chaque appel est météré.
+- **Query** : `fromLat` et `fromLng` — coordonnées GPS de **l'origine** du trajet (obligatoires). La destination est l'adresse résolue par son code (jamais fournie par le client).
+- Exemple : `GET /addresses/AKP-7X3K/eta?fromLat=6.3600&fromLng=2.4100`
+- **Réponse 200** :
+
+```json
+{
+  "data": {
+    "code": "AKP-7X3K",
+    "origin": { "lat": 6.36, "lng": 2.41 },
+    "destination": { "lat": 6.3676, "lng": 2.4252 },
+    "etaMinutes": 11,
+    "distanceMeters": 4250,
+    "source": "OSRM"
+  }
+}
+```
+
+- `source` vaut `"OSRM"` (routage réel) ou `"ESTIMATE"` (repli local quand le service de routage est indisponible : estimation à vol d'oiseau majorée d'un facteur urbain, divisée par une vitesse moyenne). Le repli ne renvoie **jamais** d'erreur — toujours une estimation exploitable.
+- **Erreurs** : `400` (origine manquante ou hors bornes `[-90,90]`/`[-180,180]`), `404 ADDRESS_NOT_FOUND`, `410 ADDRESS_INACTIVE`, `401 API_KEY_MISSING|API_KEY_INVALID|API_KEY_REVOKED|API_KEY_EXPIRED`.
+
 ### `POST /addresses/:code/report` — Signaler une adresse (habitant)
 
 - **Auth** : `Authorization: Bearer <jwt habitant>`.
