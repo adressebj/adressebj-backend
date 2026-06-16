@@ -1,11 +1,14 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ApiEndpoint } from '@prisma/client';
+import { ApiEndpoint, Prisma, Quartier } from '@prisma/client';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateQuartierDto } from './dto/create-quartier.dto';
+import { UpdateQuartierDto } from './dto/update-quartier.dto';
 
 export interface QuartierSummary {
   id: string;
@@ -46,6 +49,62 @@ export class QuartiersService {
     private readonly prisma: PrismaService,
     private readonly apiKeys: ApiKeysService,
   ) {}
+
+  /** Création manuelle d'un quartier (admin). Préfixe unique. */
+  async createQuartier(dto: CreateQuartierDto): Promise<Quartier> {
+    const existing = await this.prisma.quartier.findUnique({
+      where: { prefix: dto.prefix },
+    });
+    if (existing) {
+      throw new ConflictException({
+        code: 'QUARTIER_PREFIX_TAKEN',
+        message: 'Ce préfixe de quartier est déjà utilisé.',
+      });
+    }
+    return this.prisma.quartier.create({
+      data: {
+        name: dto.name,
+        prefix: dto.prefix,
+        centerLat: dto.centerLat ?? null,
+        centerLng: dto.centerLng ?? null,
+        polygon: (dto.polygon ?? null) as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  /** Modification d'un quartier (admin) : nom, préfixe, centre, polygone, activation. */
+  async updateQuartier(id: string, dto: UpdateQuartierDto): Promise<Quartier> {
+    const quartier = await this.prisma.quartier.findUnique({ where: { id } });
+    if (!quartier) {
+      throw new NotFoundException({
+        code: 'QUARTIER_NOT_FOUND',
+        message: 'Quartier introuvable.',
+      });
+    }
+    if (dto.prefix !== undefined && dto.prefix !== quartier.prefix) {
+      const taken = await this.prisma.quartier.findUnique({
+        where: { prefix: dto.prefix },
+      });
+      if (taken) {
+        throw new ConflictException({
+          code: 'QUARTIER_PREFIX_TAKEN',
+          message: 'Ce préfixe de quartier est déjà utilisé.',
+        });
+      }
+    }
+
+    const data: Prisma.QuartierUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.prefix !== undefined) data.prefix = dto.prefix;
+    if (dto.centerLat !== undefined) data.centerLat = dto.centerLat;
+    if (dto.centerLng !== undefined) data.centerLng = dto.centerLng;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.polygon !== undefined) {
+      data.polygon = dto.polygon as Prisma.InputJsonValue;
+    }
+
+    return this.prisma.quartier.update({ where: { id }, data });
+  }
 
   /** Liste des quartiers actifs (référentiel public). */
   async listActive(): Promise<QuartierSummary[]> {

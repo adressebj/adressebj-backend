@@ -34,6 +34,12 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `PHONE_ALREADY_REGISTERED` | 409 | Numéro déjà associé à un autre compte vivant. |
 | `OTP_INVALID` | 401 | Code OTP absent, expiré ou erroné. |
 | `PHONE_MISMATCH` | 400 | Numéro de confirmation ≠ numéro du compte (suppression). |
+| `INSUFFICIENT_ROLE` | 403 | Rôle insuffisant pour la route (ex. non-admin sur `/admin/*`). |
+| `QUARTIER_PREFIX_TAKEN` | 409 | Préfixe de quartier déjà utilisé. |
+| `MODERATOR_NOT_FOUND` | 404 | Modérateur introuvable (id inconnu ou rôle ≠ MODERATEUR). |
+| `USER_NOT_FOUND` | 404 | Habitant introuvable (id inconnu ou rôle ≠ HABITANT). |
+| `PASSWORD_REQUIRED` | 400 | Réinitialisation de mot de passe sans nouveau mot de passe. |
+| `API_KEY_NOT_FOUND` | 404 | Clé API introuvable (révocation). |
 | `NOT_ADDRESS_OWNER` | 403 | Action d'administration sur une adresse dont on n'est pas propriétaire. |
 | `REVISION_ALREADY_PENDING` | 409 | Une modification est déjà en attente de validation pour cette adresse. |
 | `ADDRESS_ALREADY_DEACTIVATED` | 409 | Adresse déjà désactivée (modification/désactivation impossible). |
@@ -287,5 +293,28 @@ Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Beare
 - **File 1 — Révisions** : `GET /moderation/revisions` · `PATCH /moderation/revisions/:id/approve` · `PATCH /moderation/revisions/:id/reject` (body `{ "reason": "…" }`, obligatoire).
 - **File 2 — Signalements** : `GET /moderation/reports` (chaque item porte `ownerInactiveOver90Days`, aide à la décision) · `PATCH /moderation/reports/:id/resolve` · `PATCH /moderation/reports/:id/deactivate` (body `{ "reason": "…" }` facultatif ; désactive l'adresse signalée → `410` public).
 - **File 3 — Contributions** : `GET /moderation/contributions` · `PATCH /moderation/contributions/:id/approve` (publiée en note terrain) · `PATCH /moderation/contributions/:id/reject`.
+
+### Administration — `Authorization: Bearer <jwt admin>`
+
+> Réservé au rôle `ADMIN` (strictement, pas Modérateur). Tout autre rôle reçoit `403 INSUFFICIENT_ROLE`.
+
+**Quartiers**
+- `POST /admin/quartiers` — Body `{ "name", "prefix", "centerLat"?, "centerLng"?, "polygon"? }`. `prefix` : 2–6 caractères `A–Z`/`0–9`, unique. **201** → quartier créé. Erreur `409 QUARTIER_PREFIX_TAKEN`.
+- `PATCH /admin/quartiers/:id` — Body partiel `{ "name"?, "prefix"?, "centerLat"?, "centerLng"?, "polygon"?, "isActive"? }`. **200** → quartier mis à jour. Erreurs `404 QUARTIER_NOT_FOUND`, `409 QUARTIER_PREFIX_TAKEN`.
+
+**Supervision du référentiel**
+- `GET /admin/addresses?code=&quartierId=&lifecycle=&category=&page=&limit=` — filtres optionnels (`code` = préfixe insensible à la casse) + pagination (`page` ≥ 1, `limit` 1–100, défaut 20). **200** → `{ "data": { "items": [ { "code", "category", "lifecycle", "published", "quartier": { "name", "prefix" }, "ownerId", "ownerDeleted", "createdAt" } ], "total", "page", "limit" } }`.
+
+**Comptes Modérateurs**
+- `POST /admin/moderators` — Body `{ "email", "password", "firstName"?, "lastName"? }`. **201** → `{ "data": { "id", "email", "firstName", "lastName", "role": "MODERATEUR", "status": "ACTIVE" } }`. Erreur `409 EMAIL_ALREADY_REGISTERED`.
+- `PATCH /admin/moderators/:id` — Body `{ "action": "deactivate" | "reactivate" | "reset", "password"? }` (`password` requis si `reset`). **200** → compte mis à jour. Erreurs `404 MODERATOR_NOT_FOUND`, `400 PASSWORD_REQUIRED`.
+
+**Suspension d'Habitants**
+- `PATCH /admin/users/:id/suspend` — Body `{ "reason"? }`. **200** → `{ "data": { "id", "status": "SUSPENDED", "suspendedReason" } }`. Un habitant suspendu est rejeté sur toute route authentifiée (`401 ACCOUNT_NOT_ACTIVE`) ; ses adresses publiées restent visibles. Erreur `404 USER_NOT_FOUND`.
+- `PATCH /admin/users/:id/unsuspend` — **200** → `{ "data": { "id", "status": "ACTIVE", "suspendedReason": null } }`.
+
+**Clés API**
+- `POST /admin/api-keys` — Body `{ "label", "expiresAt"? }` (`expiresAt` ISO 8601). **201** → `{ "data": { "id", "key": "bj_live_…", "label", "status": "ACTIVE", "expiresAt", "createdAt" } }`. **La clé en clair n'est renvoyée qu'ici.**
+- `DELETE /admin/api-keys/:id` — **200** → `{ "data": { "id", "status": "REVOKED", "revokedAt" } }`. Toute requête ultérieure avec cette clé reçoit `401 API_KEY_REVOKED`. Erreur `404 API_KEY_NOT_FOUND`.
 
 <!-- Ajouter ici chaque endpoint au fur et à mesure de son implémentation. -->
