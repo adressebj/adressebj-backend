@@ -232,7 +232,7 @@ Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Beare
 ### `GET /quartiers/:id/analytics` — Analytics de quartier (intégrateurs, clé API)
 
 - **Auth** : `Authorization: Bearer bj_live_…` (clé API). Chaque appel réussi est météré.
-- **Quota** : accès conditionné à un **ratio de remontée ≥ 80 %** sur 30 jours glissants, calculé par clé comme `CONFIRM / RESOLVE` (visites confirmées remontées ÷ résolutions effectuées). En dessous → `403`. `resolve` reste toujours accessible quel que soit le ratio.
+- **Quota** : accès conditionné à un **ratio de remontée ≥ 80 %** sur 30 jours glissants, calculé par clé comme `CONFIRM / RESOLVE` (visites confirmées remontées ÷ résolutions effectuées). En dessous → `403`. **Dénominateur nul** (aucune résolution sur la période) → accès **autorisé** : aucun trajet pris, donc aucune obligation de remontée. `resolve` reste toujours accessible quel que soit le ratio.
 - **Réponse 200** (agrégats sur les visites du quartier, 30 derniers jours) :
 
 ```json

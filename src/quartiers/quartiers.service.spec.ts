@@ -159,5 +159,24 @@ describe('QuartiersService', () => {
       prisma.visit.findMany.mockResolvedValue([]);
       await expect(service.analytics('q-1', 'key-1')).resolves.toBeDefined();
     });
+
+    it('dénominateur nul (aucune résolution) → accès autorisé, pas de 403 (cf. #F)', async () => {
+      prisma.quartier.findUnique.mockResolvedValue({
+        id: 'q-1',
+        name: 'Akpakpa',
+      });
+      apiKeys.reportingRatio.mockResolvedValue({
+        confirms: 0,
+        resolves: 0,
+        ratio: 0,
+      });
+      prisma.visit.findMany.mockResolvedValue([]);
+
+      await expect(service.analytics('q-1', 'key-1')).resolves.toBeDefined();
+      expect(apiKeys.logRequest).toHaveBeenCalledWith(
+        'key-1',
+        ApiEndpoint.ANALYTICS,
+      );
+    });
   });
 });
