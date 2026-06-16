@@ -11,6 +11,11 @@ import { AddressCategory, ApiEndpoint, RevisionStatus } from '@prisma/client';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { LocalisationsService } from '../localisations/localisations.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  EtaSource,
+  GeoPoint,
+  RoutingService,
+} from '../common/routing/routing.service';
 import { buildAssembledText, generateSequence } from './address-code';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
@@ -61,6 +66,15 @@ export interface RateResult extends RatingSummary {
 export interface VerifyResult extends RatingSummary {
   code: string;
   published: true;
+}
+
+export interface EtaResponse {
+  code: string;
+  origin: GeoPoint;
+  destination: GeoPoint;
+  etaMinutes: number;
+  distanceMeters: number;
+  source: EtaSource;
 }
 
 export interface PublicAddress {
@@ -127,6 +141,7 @@ export class AddressesService {
     private readonly prisma: PrismaService,
     private readonly localisations: LocalisationsService,
     private readonly apiKeys: ApiKeysService,
+    private readonly routing: RoutingService,
   ) {}
 
   /** Génère un code unique pour un préfixe de quartier (vérif d'unicité avant persistance). */
@@ -377,6 +392,35 @@ export class AddressesService {
     await this.apiKeys.logRequest(apiKeyId, ApiEndpoint.VERIFY);
     const summary = await this.aggregateRatings(address.id);
     return { code: address.code, published: true, ...summary };
+  }
+
+  /**
+   * Estimation ETA (intégrateurs, clé API) depuis une origine GPS vers l'adresse publiée.
+   * La destination est le GPS **figé de la Localisation** (jamais celui de la révision).
+   * Délègue au RoutingService (OSRM, repli local gracieux). Chaque appel est météré (ETA).
+   * Mêmes règles 404/410 que resolve/verify.
+   */
+  async eta(
+    code: string,
+    origin: GeoPoint,
+    apiKeyId: string,
+  ): Promise<EtaResponse> {
+    const address = await this.loadResolvable(code);
+    await this.apiKeys.logRequest(apiKeyId, ApiEndpoint.ETA);
+
+    const destination: GeoPoint = {
+      lat: address.localisation!.gpsLat,
+      lng: address.localisation!.gpsLng,
+    };
+    const result = await this.routing.getEta(origin, destination);
+    return {
+      code: address.code,
+      origin,
+      destination,
+      etaMinutes: result.etaMinutes,
+      distanceMeters: result.distanceMeters,
+      source: result.source,
+    };
   }
 
   /** Signalement d'une adresse par un habitant (file de modération n°2). */

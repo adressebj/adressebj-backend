@@ -1,14 +1,16 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { ApiKey } from '@prisma/client';
 import { ApiKeyGuard } from '../api-keys/api-key.guard';
 import { CurrentApiKey } from '../common/decorators/current-api-key.decorator';
 import {
   AddressesService,
+  EtaResponse,
   PublicAddress,
   ResolvedAddress,
   VerifyResult,
 } from './addresses.service';
+import { EtaQueryDto } from './dto/eta-query.dto';
 
 /**
  * Endpoints d'accès en lecture par code, hors espace habitant :
@@ -47,5 +49,23 @@ export class PublicAddressesController {
     @CurrentApiKey() apiKey: ApiKey,
   ): Promise<VerifyResult> {
     return this.addresses.verify(code, apiKey.id);
+  }
+
+  @Get(':code/eta')
+  @UseGuards(ApiKeyGuard)
+  @ApiSecurity('api-key')
+  @ApiOperation({
+    summary: 'Estimation ETA depuis une origine (clé API, météré)',
+  })
+  eta(
+    @Param('code') code: string,
+    @Query() query: EtaQueryDto,
+    @CurrentApiKey() apiKey: ApiKey,
+  ): Promise<EtaResponse> {
+    return this.addresses.eta(
+      code,
+      { lat: query.fromLat, lng: query.fromLng },
+      apiKey.id,
+    );
   }
 }

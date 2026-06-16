@@ -602,6 +602,45 @@
             },
             "description": "Moyenne /5 + nombre d'évaluations + published (clé API, météré VERIFY). averageRating null = aucune évaluation."
           }
+        },
+        {
+          "name": "ETA (clé API)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{apiKey}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/addresses/{{addressCode}}/eta?fromLat=6.3600&fromLng=2.4100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "addresses",
+                "{{addressCode}}",
+                "eta"
+              ],
+              "query": [
+                {
+                  "key": "fromLat",
+                  "value": "6.3600"
+                },
+                {
+                  "key": "fromLng",
+                  "value": "2.4100"
+                }
+              ]
+            },
+            "description": "Estimation ETA depuis une origine (fromLat/fromLng) vers l'adresse (clé API, météré ETA). Réponse: { code, origin, destination, etaMinutes, distanceMeters, source }. source=OSRM (routage réel) ou ESTIMATE (repli local gracieux). 400 si origine manquante/hors bornes, 404/410 comme resolve, 401 si clé invalide."
+          }
         }
       ]
     },
