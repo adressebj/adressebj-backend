@@ -30,6 +30,10 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `INVALID_RATING` | 400 | Note d'évaluation hors de l'intervalle entier 1–5. |
 | `CONTRIBUTION_MESSAGE_REQUIRED` | 400 | Message de contribution vide. |
 | `ACCOUNT_NOT_ACTIVE` | 401 | Compte suspendu ou désactivé (rejet à l'authentification). |
+| `EMAIL_ALREADY_REGISTERED` | 409 | Email déjà associé à un autre compte vivant. |
+| `PHONE_ALREADY_REGISTERED` | 409 | Numéro déjà associé à un autre compte vivant. |
+| `OTP_INVALID` | 401 | Code OTP absent, expiré ou erroné. |
+| `PHONE_MISMATCH` | 400 | Numéro de confirmation ≠ numéro du compte (suppression). |
 | `NOT_ADDRESS_OWNER` | 403 | Action d'administration sur une adresse dont on n'est pas propriétaire. |
 | `REVISION_ALREADY_PENDING` | 409 | Une modification est déjà en attente de validation pour cette adresse. |
 | `ADDRESS_ALREADY_DEACTIVATED` | 409 | Adresse déjà désactivée (modification/désactivation impossible). |
@@ -53,6 +57,29 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 
 ### `POST /auth/request-otp`
 - _(à compléter)_
+
+### `PATCH /auth/profile` — Modifier son profil (habitant, JWT)
+
+- **Auth** : `Authorization: Bearer <jwt>`.
+- **Body** (tous champs optionnels — mise à jour partielle) : `{ "firstName": "Awa", "lastName": "Bello", "email": "new@example.com" }`.
+- **Réponse 200** : `{ "data": { "id": "…", "phone": "+229…", "email": "new@example.com", "firstName": "Awa", "lastName": "Bello", "role": "HABITANT" } }`.
+- **Erreurs** : `409 EMAIL_ALREADY_REGISTERED` (email pris par un autre compte vivant), `401` (sans JWT).
+
+### `PATCH /auth/phone` — Changer de numéro (habitant, JWT)
+
+- **Pré-requis** : appeler d'abord `POST /auth/request-otp` avec le **nouveau** numéro pour recevoir un code (preuve de possession).
+- **Auth** : `Authorization: Bearer <jwt>`.
+- **Body** : `{ "phone": "+22997000001", "code": "123456" }`.
+- **Réponse 200** : profil public mis à jour (`{ "data": { …, "phone": "+22997000001" } }`). Le mot de passe n'est pas touché.
+- **Erreurs** : `401 OTP_INVALID` (code absent/expiré/erroné), `409 PHONE_ALREADY_REGISTERED` (numéro déjà pris par un autre compte vivant).
+
+### `DELETE /auth/account` — Supprimer son compte (habitant, JWT)
+
+- **Auth** : `Authorization: Bearer <jwt>`.
+- **Body** : `{ "phone": "+22997000000" }` — confirmation, doit correspondre au numéro du compte.
+- **Comportement** : anonymisation **immédiate** en pierre tombale (pas de purge différée). Le compte n'est jamais hard-delete : numéro/email/nom/prénom/mot de passe → `null`, `deletedAt` posé. En cascade : adresses désactivées (`410` public), localisations devenues vides supprimées, abonnements push / notifications / OTP purgés. Évaluations, signalements et contributions **conservés** (rattachés à la tombstone anonyme). Le JWT devient aussitôt invalide.
+- **Réponse 200** : `{ "data": { "deleted": true, "anonymizedAt": "2026-05-17T10:00:00Z" } }`.
+- **Erreurs** : `400 PHONE_MISMATCH` (le numéro ne correspond pas), `401` (sans JWT).
 
 ### `GET /addresses/:code` — Page publique (visiteur)
 
