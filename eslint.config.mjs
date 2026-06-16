@@ -28,4 +28,19 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'warn',
     },
   },
+  {
+    // Fichiers de test : les réponses supertest (`res.body`) et les callbacks de
+    // mock Jest sont typés `any` par nature. Les règles type-checked `no-unsafe-*`
+    // y produisent un bruit ininterprétable sans valeur — on les neutralise pour
+    // ces fichiers uniquement, le code de production restant strictement vérifié.
+    files: ['**/*.spec.ts', '**/*.e2e-spec.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/require-await': 'off',
+    },
+  },
 );

@@ -68,8 +68,12 @@ describe('Address edit lifecycle (e2e)', () => {
 
   async function cleanup() {
     const phones = [phone, phone2];
-    await prisma.addressRevision.deleteMany({ where: { address: { user: { phone: { in: phones } } } } });
-    await prisma.address.deleteMany({ where: { user: { phone: { in: phones } } } });
+    await prisma.addressRevision.deleteMany({
+      where: { address: { user: { phone: { in: phones } } } },
+    });
+    await prisma.address.deleteMany({
+      where: { user: { phone: { in: phones } } },
+    });
     await prisma.localisation.deleteMany({ where: { quartier: { prefix } } });
     await prisma.otpCode.deleteMany({ where: { phone: { in: phones } } });
     await prisma.user.deleteMany({ where: { phone: { in: phones } } });
@@ -84,7 +88,11 @@ describe('Address edit lifecycle (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     app.useGlobalInterceptors(new TransformInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
@@ -93,7 +101,12 @@ describe('Address edit lifecycle (e2e)', () => {
 
     await cleanup();
     await prisma.quartier.create({
-      data: { name: 'Test Edit', prefix, centerLat: gps.gpsLat, centerLng: gps.gpsLng },
+      data: {
+        name: 'Test Edit',
+        prefix,
+        centerLat: gps.gpsLat,
+        centerLng: gps.gpsLng,
+      },
     });
 
     ownerToken = await registerHabitant(phone, ownerEmail);
@@ -112,7 +125,11 @@ describe('Address edit lifecycle (e2e)', () => {
     ).body.data.token;
 
     code = (
-      await http().post('/api/addresses').set(auth(ownerToken)).send(createBody).expect(201)
+      await http()
+        .post('/api/addresses')
+        .set(auth(ownerToken))
+        .send(createBody)
+        .expect(201)
     ).body.data.code;
     await approvePending(); // publie la révision n°1
   });
@@ -178,8 +195,14 @@ describe('Address edit lifecycle (e2e)', () => {
       .expect(200);
     expect(res.body.data).toEqual({ code, mapDiscoverable: false });
 
-    const mine = await http().get('/api/addresses/mine').set(auth(ownerToken)).expect(200);
-    expect(mine.body.data.find((a: { code: string }) => a.code === code).mapDiscoverable).toBe(false);
+    const mine = await http()
+      .get('/api/addresses/mine')
+      .set(auth(ownerToken))
+      .expect(200);
+    expect(
+      mine.body.data.find((a: { code: string }) => a.code === code)
+        .mapDiscoverable,
+    ).toBe(false);
   });
 
   it('toggle discoverable par un non-propriétaire → 403', async () => {
@@ -202,7 +225,10 @@ describe('Address edit lifecycle (e2e)', () => {
   });
 
   it('re-désactivation → 409, et modification impossible → 409', async () => {
-    const del = await http().delete(`/api/addresses/${code}`).set(auth(ownerToken)).expect(409);
+    const del = await http()
+      .delete(`/api/addresses/${code}`)
+      .set(auth(ownerToken))
+      .expect(409);
     expect(del.body.code).toBe('ADDRESS_ALREADY_DEACTIVATED');
 
     const upd = await http()

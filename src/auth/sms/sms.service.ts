@@ -20,6 +20,9 @@ export class SmsService {
     );
   }
 
+  // Signature asynchrone par contrat (les appelants `await sendOtp`) ; le provider
+  // « dev » n'a pas encore d'`await` — il en gagnera un au branchement du SDK Africa's Talking.
+  // eslint-disable-next-line @typescript-eslint/require-await
   async sendOtp(phone: string, code: string): Promise<void> {
     const message = `AdresseBJ : votre code de vérification est ${code}. Il expire dans 10 minutes.`;
     if (!this.enabled) {

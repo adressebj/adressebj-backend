@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ApiEndpoint } from '@prisma/client';
 import { AddressesService } from '../addresses/addresses.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';

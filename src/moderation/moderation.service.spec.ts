@@ -160,7 +160,11 @@ describe('ModerationService', () => {
         id: 'rep-1',
         addressId: 'addr-1',
         status: ReportStatus.PENDING,
-        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+        address: {
+          code: 'AKP-1234',
+          lifecycle: 'ACTIVE',
+          localisationId: 'loc-1',
+        },
       });
       prisma.report.update.mockResolvedValue({});
 
@@ -178,7 +182,11 @@ describe('ModerationService', () => {
       prisma.report.findUnique.mockResolvedValue({
         id: 'rep-1',
         status: ReportStatus.RESOLVED,
-        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+        address: {
+          code: 'AKP-1234',
+          lifecycle: 'ACTIVE',
+          localisationId: 'loc-1',
+        },
       });
       await expect(service.resolveReport('rep-1', 'mod-1')).rejects.toThrow(
         ConflictException,
@@ -199,7 +207,11 @@ describe('ModerationService', () => {
         id: 'rep-1',
         addressId: 'addr-1',
         status: ReportStatus.PENDING,
-        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+        address: {
+          code: 'AKP-1234',
+          lifecycle: 'ACTIVE',
+          localisationId: 'loc-1',
+        },
       });
       const addrUpdate = jest.fn().mockResolvedValue({});
       const revUpdateMany = jest.fn().mockResolvedValue({});
@@ -212,7 +224,11 @@ describe('ModerationService', () => {
         }),
       );
 
-      const res = await service.deactivateFromReport('rep-1', 'mod-1', 'Fraude');
+      const res = await service.deactivateFromReport(
+        'rep-1',
+        'mod-1',
+        'Fraude',
+      );
 
       expect(res).toMatchObject({
         status: ReportStatus.ACTIONED,
@@ -229,7 +245,10 @@ describe('ModerationService', () => {
         }),
       );
       expect(revUpdateMany).toHaveBeenCalledWith({
-        where: { addressId: 'addr-1', status: RevisionStatus.EN_ATTENTE_VALIDATION },
+        where: {
+          addressId: 'addr-1',
+          status: RevisionStatus.EN_ATTENTE_VALIDATION,
+        },
         data: { status: RevisionStatus.OBSOLETE },
       });
       expect(localisations.cleanupIfEmpty).toHaveBeenCalledWith('loc-1');
@@ -240,7 +259,11 @@ describe('ModerationService', () => {
         id: 'rep-1',
         addressId: 'addr-1',
         status: ReportStatus.PENDING,
-        address: { code: 'AKP-1234', lifecycle: 'DESACTIVEE', localisationId: null },
+        address: {
+          code: 'AKP-1234',
+          lifecycle: 'DESACTIVEE',
+          localisationId: null,
+        },
       });
       await expect(
         service.deactivateFromReport('rep-1', 'mod-1'),
