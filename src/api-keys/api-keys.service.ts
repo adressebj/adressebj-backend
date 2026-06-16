@@ -42,4 +42,36 @@ export class ApiKeysService {
   async logRequest(apiKeyId: string, endpoint: ApiEndpoint): Promise<void> {
     await this.prisma.apiRequestLog.create({ data: { apiKeyId, endpoint } });
   }
+
+  /**
+   * Ratio de remontée d'une clé sur 30 jours glissants : `CONFIRM` / `RESOLVE`.
+   * Numérateur = visites confirmées remontées par l'intégrateur ; dénominateur =
+   * résolutions effectuées (les navigations à reporter). `ratio = 0` si aucune
+   * résolution (pas de base de remontée). Conditionne l'accès aux analytics (≥ 80 %).
+   */
+  async reportingRatio(apiKeyId: string): Promise<{
+    confirms: number;
+    resolves: number;
+    ratio: number;
+  }> {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [confirms, resolves] = await Promise.all([
+      this.prisma.apiRequestLog.count({
+        where: {
+          apiKeyId,
+          endpoint: ApiEndpoint.CONFIRM,
+          createdAt: { gte: since },
+        },
+      }),
+      this.prisma.apiRequestLog.count({
+        where: {
+          apiKeyId,
+          endpoint: ApiEndpoint.RESOLVE,
+          createdAt: { gte: since },
+        },
+      }),
+    ]);
+    const ratio = resolves > 0 ? confirms / resolves : 0;
+    return { confirms, resolves, ratio };
+  }
 }

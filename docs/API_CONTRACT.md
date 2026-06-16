@@ -21,7 +21,8 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `ADDRESS_INACTIVE` | 410 | Adresse désactivée — données non exposées (corps enrichi : `address_code`, `deactivated_at`). |
 | `ADDRESS_ALREADY_EXISTS_AT_LOCATION` | 409 | L'habitant a déjà une adresse sur cette localisation. |
 | `COORDINATES_OUT_OF_COVERAGE` | 400 | GPS hors de tout quartier couvert. |
-| `ANALYTICS_QUOTA_INSUFFICIENT` | 403 | Ratio de remontée < 0,80 sur la clé API. |
+| `ANALYTICS_QUOTA_INSUFFICIENT` | 403 | Ratio de remontée < 0,80 sur la clé API (analytics quartier). |
+| `QUARTIER_NOT_FOUND` | 404 | Aucun quartier pour cet identifiant. |
 | `API_KEY_MISSING` | 401 | Endpoint intégrateur appelé sans header `Authorization: Bearer`. |
 | `API_KEY_INVALID` | 401 | Clé API inconnue ou mal formée. |
 | `API_KEY_REVOKED` | 401 | Clé API révoquée. |
@@ -222,6 +223,35 @@ Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Beare
 - **API** (clé `bj_live_…`) — Body : `{ "addressCode": "AKP-7X3K", "departAt": "…", "arrivedAt": "…", "finalPrice": 1500 }`. Chaque appel est météré.
 - **Réponse 201** : `{ "data": { "visitId": "…", "recorded": true } }`.
 - **Erreurs** : `400 INVALID_VISIT_TIMESTAMPS` (arrivée < départ), `404 VISIT_NOT_FOUND` (web), `400 VISIT_ID_REQUIRED` / `400 VISIT_FIELDS_REQUIRED` (champs manquants selon le mode), `401 API_KEY_*` (clé fournie mais invalide).
+
+### `GET /quartiers` — Liste des quartiers actifs (public)
+
+- **Auth** : aucune.
+- **Réponse 200** : `{ "data": [ { "id": "…", "name": "Akpakpa", "prefix": "AKP" } ] }`.
+
+### `GET /quartiers/:id/analytics` — Analytics de quartier (intégrateurs, clé API)
+
+- **Auth** : `Authorization: Bearer bj_live_…` (clé API). Chaque appel réussi est météré.
+- **Quota** : accès conditionné à un **ratio de remontée ≥ 80 %** sur 30 jours glissants, calculé par clé comme `CONFIRM / RESOLVE` (visites confirmées remontées ÷ résolutions effectuées). En dessous → `403`. `resolve` reste toujours accessible quel que soit le ratio.
+- **Réponse 200** (agrégats sur les visites du quartier, 30 derniers jours) :
+
+```json
+{
+  "data": {
+    "quartierId": "…",
+    "quartierName": "Akpakpa",
+    "totalVisits": 142,
+    "medianEtaMinutes": 11,
+    "medianPriceFCFA": 1200,
+    "peakHours": ["08:00-09:00", "17:00-18:00"],
+    "successRate": 0.94,
+    "period": "last_30_days"
+  }
+}
+```
+
+- Quartier sans visite sur la période : `totalVisits: 0`, `medianEtaMinutes`/`medianPriceFCFA`/`successRate` à `null`, `peakHours: []`. `medianPriceFCFA`/`medianEtaMinutes` à `null` = « pas de donnée » (à distinguer d'une valeur de 0).
+- **Erreurs** : `404 QUARTIER_NOT_FOUND`, `403 ANALYTICS_QUOTA_INSUFFICIENT` (message indiquant le % atteint), `401 API_KEY_MISSING|API_KEY_INVALID|API_KEY_REVOKED|API_KEY_EXPIRED`.
 
 ### Modération (dashboard Modérateur/Admin) — `Authorization: Bearer <jwt mod/admin>`
 
