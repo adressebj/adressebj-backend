@@ -7,6 +7,7 @@ import {
 import { AddressCategory, ApiEndpoint, RevisionStatus } from '@prisma/client';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { LocalisationsService } from '../localisations/localisations.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RoutingService } from '../common/routing/routing.service';
 import { AddressesService } from './addresses.service';
 
@@ -45,6 +46,7 @@ describe('AddressesService', () => {
   let localisations: { resolveOrCreate: jest.Mock; cleanupIfEmpty: jest.Mock };
   let apiKeys: { logRequest: jest.Mock };
   let routing: { getEta: jest.Mock };
+  let notifications: { notifyOwner: jest.Mock };
   let service: AddressesService;
 
   beforeEach(() => {
@@ -55,11 +57,13 @@ describe('AddressesService', () => {
     };
     apiKeys = { logRequest: jest.fn().mockResolvedValue(undefined) };
     routing = { getEta: jest.fn() };
+    notifications = { notifyOwner: jest.fn().mockResolvedValue(undefined) };
     service = new AddressesService(
       prisma as never,
       localisations as unknown as LocalisationsService,
       apiKeys as unknown as ApiKeysService,
       routing as unknown as RoutingService,
+      notifications as unknown as NotificationsService,
     );
   });
 
@@ -162,6 +166,7 @@ describe('AddressesService', () => {
   const publishedAddress = {
     id: 'addr-1',
     code: 'AKP-7X3K',
+    userId: 'owner-1',
     lifecycle: 'ACTIVE',
     publishedRevisionId: 'rev-1',
     publishedRevision: {
@@ -313,6 +318,47 @@ describe('AddressesService', () => {
         NotFoundException,
       );
       expect(prisma.rating.upsert).not.toHaveBeenCalled();
+    });
+
+    it('alerte le propriétaire au franchissement du seuil de fiabilité', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.upsert.mockResolvedValue({});
+      // avant : moyenne saine (3.0, 4 notes) ; après : dégradée (2.4, 5 notes)
+      prisma.rating.aggregate
+        .mockResolvedValueOnce({ _avg: { stars: 3.0 }, _count: { stars: 4 } })
+        .mockResolvedValueOnce({ _avg: { stars: 2.4 }, _count: { stars: 5 } });
+
+      await service.rate('user-1', 'AKP-7X3K', 1);
+
+      expect(notifications.notifyOwner).toHaveBeenCalledWith(
+        'owner-1',
+        expect.objectContaining({ type: 'RELIABILITY_WARNING' }),
+      );
+    });
+
+    it("n'alerte pas si la moyenne reste sous le seuil (déjà dégradée)", async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.upsert.mockResolvedValue({});
+      // avant déjà sous le seuil → pas de nouveau franchissement
+      prisma.rating.aggregate
+        .mockResolvedValueOnce({ _avg: { stars: 2.0 }, _count: { stars: 5 } })
+        .mockResolvedValueOnce({ _avg: { stars: 1.8 }, _count: { stars: 6 } });
+
+      await service.rate('user-1', 'AKP-7X3K', 1);
+
+      expect(notifications.notifyOwner).not.toHaveBeenCalled();
+    });
+
+    it("n'alerte pas sous le minimum d'évaluations", async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.upsert.mockResolvedValue({});
+      prisma.rating.aggregate
+        .mockResolvedValueOnce({ _avg: { stars: null }, _count: { stars: 0 } })
+        .mockResolvedValueOnce({ _avg: { stars: 1.0 }, _count: { stars: 2 } });
+
+      await service.rate('user-1', 'AKP-7X3K', 1);
+
+      expect(notifications.notifyOwner).not.toHaveBeenCalled();
     });
   });
 

@@ -7,9 +7,15 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { AddressCategory, ApiEndpoint, RevisionStatus } from '@prisma/client';
+import {
+  AddressCategory,
+  ApiEndpoint,
+  NotificationType,
+  RevisionStatus,
+} from '@prisma/client';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { LocalisationsService } from '../localisations/localisations.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   EtaSource,
@@ -21,6 +27,11 @@ import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
 
 const MAX_CODE_ATTEMPTS = 50;
+
+/** Seuil de moyenne sous lequel le propriétaire est alerté d'une dégradation de fiabilité. */
+const RELIABILITY_WARNING_THRESHOLD = 2.5;
+/** Nombre minimal d'évaluations avant qu'une moyenne basse soit jugée significative. */
+const RELIABILITY_WARNING_MIN_RATINGS = 3;
 
 export interface CreatedAddress {
   code: string;
@@ -142,6 +153,7 @@ export class AddressesService {
     private readonly localisations: LocalisationsService,
     private readonly apiKeys: ApiKeysService,
     private readonly routing: RoutingService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Génère un code unique pour un préfixe de quartier (vérif d'unicité avant persistance). */
@@ -374,13 +386,52 @@ export class AddressesService {
       });
     }
     const address = await this.loadResolvable(code);
+    const before = await this.aggregateRatings(address.id);
     await this.prisma.rating.upsert({
       where: { userId_addressId: { userId, addressId: address.id } },
       create: { userId, addressId: address.id, stars },
       update: { stars },
     });
     const summary = await this.aggregateRatings(address.id);
+
+    await this.maybeWarnReliability(
+      address.userId,
+      address.id,
+      code,
+      before,
+      summary,
+    );
     return { recorded: true, ...summary };
+  }
+
+  /**
+   * Alerte le propriétaire **uniquement au franchissement** du seuil de fiabilité
+   * (moyenne précédente saine → moyenne désormais sous le seuil), au-delà d'un
+   * minimum d'évaluations. Best-effort : ne fait jamais échouer la notation.
+   */
+  private async maybeWarnReliability(
+    ownerId: string,
+    addressId: string,
+    code: string,
+    before: RatingSummary,
+    after: RatingSummary,
+  ): Promise<void> {
+    const wasHealthy =
+      before.averageRating == null ||
+      before.averageRating >= RELIABILITY_WARNING_THRESHOLD;
+    const nowDegraded =
+      after.averageRating != null &&
+      after.ratingCount >= RELIABILITY_WARNING_MIN_RATINGS &&
+      after.averageRating < RELIABILITY_WARNING_THRESHOLD;
+
+    if (wasHealthy && nowDegraded) {
+      await this.notifications.notifyOwner(ownerId, {
+        type: NotificationType.RELIABILITY_WARNING,
+        message: `La fiabilité de votre adresse ${code} a baissé (note moyenne ${after.averageRating}/5).`,
+        addressId,
+        url: `/dashboard/address/${code}`,
+      });
+    }
   }
 
   /**
