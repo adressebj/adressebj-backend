@@ -1,1488 +1,1881 @@
 {
-  "info": {
-    "_postman_id": "91a8c9b3-6cf4-4cad-ae7f-ffda05300a94",
-    "name": "AdresseBJ — Backend API",
-    "description": "Collection vivante de l'API AdresseBJ. À maintenir en synchro stricte avec l'API réelle (cf. docs/API_POSTMAN.md). Variables d'environnement : baseUrl, jwt, jwtMod, apiKey. Variables de collection : addressCode, revisionId (auto-capturées).",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ "info": {
+  "_postman_id": "91a8c9b3-6cf4-4cad-ae7f-ffda05300a94",
+  "name": "AdresseBJ — Backend API",
+  "description": "Collection vivante de l'API AdresseBJ. À maintenir en synchro stricte avec l'API réelle (cf. docs/API_POSTMAN.md). Variables d'environnement : baseUrl, jwt, jwtMod, apiKey. Variables de collection : addressCode, revisionId (auto-capturées).",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "item": [
+  {
+   "name": "Auth",
+   "item": [
+    {
+     "name": "Request OTP",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"phone\": \"+22990000000\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/auth/request-otp",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "auth",
+        "request-otp"
+       ]
+      },
+      "description": "Envoie un OTP au numéro (provider dev : code visible dans les logs serveur)."
+     }
+    },
+    {
+     "name": "Register",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"phone\": \"+22990000000\",\n  \"code\": \"123456\",\n  \"email\": \"habitant@example.com\",\n  \"password\": \"motdepasse123\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/auth/register",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "auth",
+        "register"
+       ]
+      },
+      "description": "Crée l'habitant après vérification de l'OTP. Capture {{jwt}}."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d = pm.response.json().data;",
+         "if (d && d.token) pm.environment.set('jwt', d.token);",
+         "pm.test('token reçu', () => pm.expect(d.token).to.be.a('string'));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Login (habitant)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"phone\": \"+22990000000\",\n  \"password\": \"motdepasse123\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "auth",
+        "login"
+       ]
+      },
+      "description": "Connexion par téléphone OU email (un seul des deux). Capture {{jwt}}."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d = pm.response.json().data;",
+         "if (d && d.token) pm.environment.set('jwt', d.token);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Login (modérateur)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"moderateur@example.com\",\n  \"password\": \"motdepasse123\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "auth",
+        "login"
+       ]
+      },
+      "description": "Connexion modérateur/admin par email. Capture {{jwtMod}}."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d = pm.response.json().data;",
+         "if (d && d.token) pm.environment.set('jwtMod', d.token);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Login (admin)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"admin@adressebj.bj\",\n  \"password\": \"motdepasse123\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/auth/login",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "auth",
+        "login"
+       ]
+      },
+      "description": "Connexion administrateur par email. Capture {{jwtAdmin}}."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d = pm.response.json().data;",
+         "if (d && d.token) pm.environment.set('jwtAdmin', d.token);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Update profile (habitant)",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"firstName\": \"Awa\",\n  \"lastName\": \"Bello\",\n  \"email\": \"new@example.com\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/auth/profile",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "auth",
+        "profile"
+       ]
+      },
+      "description": "Modifie nom/prénom/email (champs optionnels). 409 EMAIL_ALREADY_REGISTERED si email pris par un autre compte vivant."
+     }
+    },
+    {
+     "name": "Change phone (habitant, re-OTP)",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"phone\": \"+22997000001\",\n  \"code\": \"123456\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/auth/phone",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "auth",
+        "phone"
+       ]
+      },
+      "description": "Changement de numéro. Pré-requis : POST /auth/request-otp sur le nouveau numéro. 401 OTP_INVALID, 409 PHONE_ALREADY_REGISTERED."
+     }
+    },
+    {
+     "name": "Delete account (anonymisation)",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"phone\": \"+22997000000\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/auth/account",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "auth",
+        "account"
+       ]
+      },
+      "description": "Suppression de compte = anonymisation immédiate (pierre tombale). Le numéro doit correspondre au compte (400 PHONE_MISMATCH sinon). Adresses désactivées, données perso purgées, ratings/reports/contributions conservés. Le JWT devient invalide."
+     }
+    }
+   ]
   },
-  "item": [
+  {
+   "name": "Addresses",
+   "item": [
     {
-      "name": "Auth",
-      "item": [
-        {
-          "name": "Request OTP",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone\": \"+22990000000\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/request-otp",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "request-otp"
-              ]
-            },
-            "description": "Envoie un OTP au numéro (provider dev : code visible dans les logs serveur)."
-          }
-        },
-        {
-          "name": "Register",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone\": \"+22990000000\",\n  \"code\": \"123456\",\n  \"email\": \"habitant@example.com\",\n  \"password\": \"motdepasse123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "register"
-              ]
-            },
-            "description": "Crée l'habitant après vérification de l'OTP. Capture {{jwt}}."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d = pm.response.json().data;",
-                  "if (d && d.token) pm.environment.set('jwt', d.token);",
-                  "pm.test('token reçu', () => pm.expect(d.token).to.be.a('string'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login (habitant)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone\": \"+22990000000\",\n  \"password\": \"motdepasse123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "login"
-              ]
-            },
-            "description": "Connexion par téléphone OU email (un seul des deux). Capture {{jwt}}."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d = pm.response.json().data;",
-                  "if (d && d.token) pm.environment.set('jwt', d.token);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login (modérateur)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"moderateur@example.com\",\n  \"password\": \"motdepasse123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "login"
-              ]
-            },
-            "description": "Connexion modérateur/admin par email. Capture {{jwtMod}}."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d = pm.response.json().data;",
-                  "if (d && d.token) pm.environment.set('jwtMod', d.token);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login (admin)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@adressebj.bj\",\n  \"password\": \"motdepasse123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "login"
-              ]
-            },
-            "description": "Connexion administrateur par email. Capture {{jwtAdmin}}."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d = pm.response.json().data;",
-                  "if (d && d.token) pm.environment.set('jwtAdmin', d.token);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Update profile (habitant)",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Awa\",\n  \"lastName\": \"Bello\",\n  \"email\": \"new@example.com\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/profile",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "profile"
-              ]
-            },
-            "description": "Modifie nom/prénom/email (champs optionnels). 409 EMAIL_ALREADY_REGISTERED si email pris par un autre compte vivant."
-          }
-        },
-        {
-          "name": "Change phone (habitant, re-OTP)",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone\": \"+22997000001\",\n  \"code\": \"123456\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/phone",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "phone"
-              ]
-            },
-            "description": "Changement de numéro. Pré-requis : POST /auth/request-otp sur le nouveau numéro. 401 OTP_INVALID, 409 PHONE_ALREADY_REGISTERED."
-          }
-        },
-        {
-          "name": "Delete account (anonymisation)",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phone\": \"+22997000000\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/account",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "account"
-              ]
-            },
-            "description": "Suppression de compte = anonymisation immédiate (pierre tombale). Le numéro doit correspondre au compte (400 PHONE_MISMATCH sinon). Adresses désactivées, données perso purgées, ratings/reports/contributions conservés. Le JWT devient invalide."
-          }
+     "name": "Create address",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"category\": \"COMMERCE\",\n  \"steps\": [\n    \"Partir du carrefour\",\n    \"Boutique verte\"\n  ],\n  \"photoUrl\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n  \"gpsLat\": 6.4001,\n  \"gpsLng\": 2.4001\n}",
+       "options": {
+        "raw": {
+         "language": "json"
         }
-      ]
+       }
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses"
+       ]
+      },
+      "description": "localisationId résolu côté serveur (jamais envoyé par le client). Capture {{addressCode}}."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d = pm.response.json().data;",
+         "if (d && d.code) pm.collectionVariables.set('addressCode', d.code);",
+         "pm.test('révision n°1 en attente', () => pm.expect(d.revisionStatus).to.eql('EN_ATTENTE_VALIDATION'));"
+        ]
+       }
+      }
+     ]
     },
     {
-      "name": "Addresses",
-      "item": [
+     "name": "My addresses",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
         {
-          "name": "Create address",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"category\": \"COMMERCE\",\n  \"steps\": [\n    \"Partir du carrefour\",\n    \"Boutique verte\"\n  ],\n  \"photoUrl\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n  \"gpsLat\": 6.4001,\n  \"gpsLng\": 2.4001\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses"
-              ]
-            },
-            "description": "localisationId résolu côté serveur (jamais envoyé par le client). Capture {{addressCode}}."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d = pm.response.json().data;",
-                  "if (d && d.code) pm.collectionVariables.set('addressCode', d.code);",
-                  "pm.test('révision n°1 en attente', () => pm.expect(d.revisionStatus).to.eql('EN_ATTENTE_VALIDATION'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "My addresses",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/mine",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "mine"
-              ]
-            },
-            "description": "Liste les adresses de l'habitant connecté + leur état (published, statut de révision)."
-          }
-        },
-        {
-          "name": "Rate address",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"stars\": 4\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}/rate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}",
-                "rate"
-              ]
-            },
-            "description": "Évaluation 1–5 (upsert sur l'habitant). Renvoie la moyenne recalculée. 400 INVALID_RATING hors bornes, 404 si non publiée."
-          }
-        },
-        {
-          "name": "Report address",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"message\": \"La maison a été démolie.\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}/report",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}",
-                "report"
-              ]
-            },
-            "description": "Signalement (message facultatif). 201 {reportId,status:PENDING}. 404/410 selon l'état."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d=pm.response.json().data;",
-                  "if(d&&d.reportId)pm.collectionVariables.set('reportId',d.reportId);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Submit contribution",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"message\": \"Sens unique le matin, entrer par le nord.\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}/contribution",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}",
-                "contribution"
-              ]
-            },
-            "description": "Contribution terrain (requise, non vide). 201 {contributionId,status:PENDING}. 400 CONTRIBUTION_MESSAGE_REQUIRED."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d=pm.response.json().data;",
-                  "if(d&&d.contributionId)pm.collectionVariables.set('contributionId',d.contributionId);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Update address",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}"
-              ]
-            },
-            "description": "Nouvelle version (catégorie/étapes/photo ; GPS non modifiable) → révision EN_ATTENTE. Public garde l'ancienne version. 409 REVISION_ALREADY_PENDING si une modif est déjà en attente.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"category\": \"COMMERCE\",\n  \"steps\": [\n    \"Nouveau repère\",\n    \"Portail vert\"\n  ],\n  \"photoUrl\": \"https://example.com/new.jpg\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "Toggle discoverable",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}/discoverable",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}",
-                "discoverable"
-              ]
-            },
-            "description": "Bascule mapDiscoverable (retire/ajoute l'adresse de la carte browsable).",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"discoverable\": false\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "Deactivate address",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwt}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}"
-              ]
-            },
-            "description": "Désactivation définitive par le propriétaire → 410 ensuite. 409 si déjà désactivée."
-          }
-        },
-        {
-          "name": "Public page",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}"
-              ]
-            },
-            "description": "Public, sans auth. 200 si publiée, 404 si jamais publiée/inexistante, 410 si désactivée."
-          }
-        },
-        {
-          "name": "Resolve (clé API)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{apiKey}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}/resolve",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}",
-                "resolve"
-              ]
-            },
-            "description": "Header Authorization: Bearer {{apiKey}} (bj_live_…). Résolution complète + métering. 401 si clé absente/invalide/révoquée/expirée."
-          }
-        },
-        {
-          "name": "Verify (clé API)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{apiKey}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}/verify",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}",
-                "verify"
-              ]
-            },
-            "description": "Moyenne /5 + nombre d'évaluations + published (clé API, météré VERIFY). averageRating null = aucune évaluation."
-          }
-        },
-        {
-          "name": "ETA (clé API)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{apiKey}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/addresses/{{addressCode}}/eta?fromLat=6.3600&fromLng=2.4100",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "addresses",
-                "{{addressCode}}",
-                "eta"
-              ],
-              "query": [
-                {
-                  "key": "fromLat",
-                  "value": "6.3600"
-                },
-                {
-                  "key": "fromLng",
-                  "value": "2.4100"
-                }
-              ]
-            },
-            "description": "Estimation ETA depuis une origine (fromLat/fromLng) vers l'adresse (clé API, météré ETA). Réponse: { code, origin, destination, etaMinutes, distanceMeters, source }. source=OSRM (routage réel) ou ESTIMATE (repli local gracieux). 400 si origine manquante/hors bornes, 404/410 comme resolve, 401 si clé invalide."
-          }
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
         }
-      ]
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/mine",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "mine"
+       ]
+      },
+      "description": "Liste les adresses de l'habitant connecté + leur état (published, statut de révision)."
+     }
     },
     {
-      "name": "Moderation",
-      "item": [
-        {
-          "name": "List pending revisions",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/revisions",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "revisions"
-              ]
-            },
-            "description": "File des révisions EN_ATTENTE_VALIDATION (Mod/Admin). Capture {{revisionId}} (1re entrée)."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d = pm.response.json().data;",
-                  "if (Array.isArray(d) && d.length) pm.collectionVariables.set('revisionId', d[0].id);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Approve revision",
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/revisions/{{revisionId}}/approve",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "revisions",
-                "{{revisionId}}",
-                "approve"
-              ]
-            },
-            "description": "Publie la révision et bascule le pointeur. L'ancienne version publiée passe ARCHIVEE."
-          }
-        },
-        {
-          "name": "Reject revision",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reason\": \"Photo illisible\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/revisions/{{revisionId}}/reject",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "revisions",
-                "{{revisionId}}",
-                "reject"
-              ]
-            },
-            "description": "Rejette la révision (motif obligatoire). Le pointeur public reste inchangé."
-          }
-        },
-        {
-          "name": "List reports",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/reports",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "reports"
-              ]
-            },
-            "description": "File 2 : signalements PENDING. Chaque item porte ownerInactiveOver90Days."
-          }
-        },
-        {
-          "name": "Resolve report",
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/reports/{{reportId}}/resolve",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "reports",
-                "{{reportId}}",
-                "resolve"
-              ]
-            },
-            "description": "Marque le signalement RESOLVED (adresse intacte)."
-          }
-        },
-        {
-          "name": "Deactivate reported address",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/reports/{{reportId}}/deactivate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "reports",
-                "{{reportId}}",
-                "deactivate"
-              ]
-            },
-            "description": "Désactive l'adresse signalée (motif facultatif). Adresse → 410 public.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reason\": \"Adresse frauduleuse\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "List contributions",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/contributions",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "contributions"
-              ]
-            },
-            "description": "File 3 : contributions terrain PENDING."
-          }
-        },
-        {
-          "name": "Approve contribution",
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/contributions/{{contributionId}}/approve",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "contributions",
-                "{{contributionId}}",
-                "approve"
-              ]
-            },
-            "description": "Approuve → note terrain publique (jamais injectée dans steps)."
-          }
-        },
-        {
-          "name": "Reject contribution",
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{jwtMod}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/moderation/contributions/{{contributionId}}/reject",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "moderation",
-                "contributions",
-                "{{contributionId}}",
-                "reject"
-              ]
-            },
-            "description": "Rejette la contribution."
-          }
+     "name": "Rate address",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"stars\": 4\n}",
+       "options": {
+        "raw": {
+         "language": "json"
         }
-      ]
+       }
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}/rate",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}",
+        "rate"
+       ]
+      },
+      "description": "Évaluation 1–5 (upsert sur l'habitant). Renvoie la moyenne recalculée. 400 INVALID_RATING hors bornes, 404 si non publiée."
+     }
     },
     {
-      "name": "Quartiers",
-      "item": [
-        {
-          "name": "List active quartiers",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/quartiers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "quartiers"
-              ]
-            },
-            "description": "Liste publique des quartiers actifs (id, name, prefix)."
-          }
-        },
-        {
-          "name": "Analytics (clé API + quota)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{apiKey}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/quartiers/{{quartierId}}/analytics",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "quartiers",
-                "{{quartierId}}",
-                "analytics"
-              ]
-            },
-            "description": "Analytics de quartier (clé API, météré ANALYTICS). Accès conditionné au ratio de remontée CONFIRM/RESOLVE >= 80% sur 30j. Réponse: { quartierId, quartierName, totalVisits, medianEtaMinutes, medianPriceFCFA, peakHours[], successRate, period }. 403 ANALYTICS_QUOTA_INSUFFICIENT si quota insuffisant, 404 QUARTIER_NOT_FOUND, 401 si clé invalide."
-          }
+     "name": "Report address",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"message\": \"La maison a été démolie.\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
         }
-      ]
+       }
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}/report",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}",
+        "report"
+       ]
+      },
+      "description": "Signalement (message facultatif). 201 {reportId,status:PENDING}. 404/410 selon l'état."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d=pm.response.json().data;",
+         "if(d&&d.reportId)pm.collectionVariables.set('reportId',d.reportId);"
+        ]
+       }
+      }
+     ]
     },
     {
-      "name": "Map",
-      "item": [
-        {
-          "name": "Browse map (bbox)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/map/addresses?north=6.41&south=6.40&east=2.41&west=2.40",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "map",
-                "addresses"
-              ],
-              "query": [
-                {
-                  "key": "north",
-                  "value": "6.41"
-                },
-                {
-                  "key": "south",
-                  "value": "6.40"
-                },
-                {
-                  "key": "east",
-                  "value": "2.41"
-                },
-                {
-                  "key": "west",
-                  "value": "2.40"
-                },
-                {
-                  "key": "category",
-                  "value": "COMMERCE",
-                  "disabled": true
-                }
-              ]
-            },
-            "description": "Adresses publiées + découvrables dans une bbox. Matrice de visibilité appliquée côté serveur (domicile muet/preview null). category optionnel (décocher pour tout). Public."
-          }
+     "name": "Submit contribution",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"message\": \"Sens unique le matin, entrer par le nord.\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
         }
-      ]
+       }
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}/contribution",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}",
+        "contribution"
+       ]
+      },
+      "description": "Contribution terrain (requise, non vide). 201 {contributionId,status:PENDING}. 400 CONTRIBUTION_MESSAGE_REQUIRED."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d=pm.response.json().data;",
+         "if(d&&d.contributionId)pm.collectionVariables.set('contributionId',d.contributionId);"
+        ]
+       }
+      }
+     ]
     },
     {
-      "name": "Visits",
-      "item": [
+     "name": "Update address",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
         {
-          "name": "Start visit",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"addressCode\": \"{{addressCode}}\",\n  \"departAt\": \"2026-05-17T09:00:00Z\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/visits/start",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "visits",
-                "start"
-              ]
-            },
-            "description": "Départ de navigation (public, anonyme). 201 {visitId}. 404/410 si adresse non publiée."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d=pm.response.json().data;",
-                  "if(d&&d.visitId)pm.collectionVariables.set('visitId',d.visitId);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Confirm visit (web)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"visitId\": \"{{visitId}}\",\n  \"arrivedAt\": \"2026-05-17T09:14:00Z\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/visits/confirm",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "visits",
-                "confirm"
-              ]
-            },
-            "description": "Confirmation web « J'y suis » (sans clé). 400 INVALID_VISIT_TIMESTAMPS si arrivée<départ, 404 VISIT_NOT_FOUND."
-          }
-        },
-        {
-          "name": "Confirm visit (clé API)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{apiKey}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"addressCode\": \"{{addressCode}}\",\n  \"departAt\": \"2026-05-17T09:00:00Z\",\n  \"arrivedAt\": \"2026-05-17T09:14:00Z\",\n  \"finalPrice\": 1500\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/visits/confirm",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "visits",
-                "confirm"
-              ]
-            },
-            "description": "Remontée intégrateur (clé bj_live_…). Crée une visite complète + métère CONFIRM."
-          }
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
         }
-      ]
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}"
+       ]
+      },
+      "description": "Nouvelle version (catégorie/étapes/photo ; GPS non modifiable) → révision EN_ATTENTE. Public garde l'ancienne version. 409 REVISION_ALREADY_PENDING si une modif est déjà en attente.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"category\": \"COMMERCE\",\n  \"steps\": [\n    \"Nouveau repère\",\n    \"Portail vert\"\n  ],\n  \"photoUrl\": \"https://example.com/new.jpg\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      }
+     }
     },
     {
-      "name": "Admin",
-      "description": "Routes ADMIN strict (Authorization: Bearer {{jwtAdmin}}).",
-      "item": [
+     "name": "Toggle discoverable",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
         {
-          "name": "Create quartier",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Akpakpa\",\n  \"prefix\": \"AKP\",\n  \"centerLat\": 6.3676,\n  \"centerLng\": 2.4252\n}", "options": { "raw": { "language": "json" } } },
-            "url": { "raw": "{{baseUrl}}/admin/quartiers", "host": ["{{baseUrl}}"], "path": ["admin", "quartiers"] },
-            "description": "Crée un quartier. 409 QUARTIER_PREFIX_TAKEN si le préfixe existe."
-          }
-        },
-        {
-          "name": "Update quartier",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "body": { "mode": "raw", "raw": "{\n  \"isActive\": false\n}", "options": { "raw": { "language": "json" } } },
-            "url": { "raw": "{{baseUrl}}/admin/quartiers/{{quartierId}}", "host": ["{{baseUrl}}"], "path": ["admin", "quartiers", "{{quartierId}}"] },
-            "description": "Modifie / (dés)active un quartier. 404 QUARTIER_NOT_FOUND."
-          }
-        },
-        {
-          "name": "List addresses (supervision)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "url": { "raw": "{{baseUrl}}/admin/addresses?page=1&limit=20", "host": ["{{baseUrl}}"], "path": ["admin", "addresses"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }, { "key": "code", "value": "AKP", "disabled": true }, { "key": "lifecycle", "value": "ACTIVE", "disabled": true }, { "key": "category", "value": "COMMERCE", "disabled": true }, { "key": "quartierId", "value": "{{quartierId}}", "disabled": true }] },
-            "description": "Supervision du référentiel : filtres + pagination."
-          }
-        },
-        {
-          "name": "Create moderator",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"moderateur@adressebj.bj\",\n  \"password\": \"motdepasse123\"\n}", "options": { "raw": { "language": "json" } } },
-            "url": { "raw": "{{baseUrl}}/admin/moderators", "host": ["{{baseUrl}}"], "path": ["admin", "moderators"] },
-            "description": "Crée un compte Modérateur. 409 EMAIL_ALREADY_REGISTERED."
-          }
-        },
-        {
-          "name": "Update moderator (deactivate/reactivate/reset)",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "body": { "mode": "raw", "raw": "{\n  \"action\": \"reset\",\n  \"password\": \"nouveaupass1\"\n}", "options": { "raw": { "language": "json" } } },
-            "url": { "raw": "{{baseUrl}}/admin/moderators/{{moderatorId}}", "host": ["{{baseUrl}}"], "path": ["admin", "moderators", "{{moderatorId}}"] },
-            "description": "action ∈ deactivate|reactivate|reset (password requis si reset). 404 MODERATOR_NOT_FOUND, 400 PASSWORD_REQUIRED."
-          }
-        },
-        {
-          "name": "Suspend user",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Comportement abusif\"\n}", "options": { "raw": { "language": "json" } } },
-            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/suspend", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "suspend"] },
-            "description": "Suspend un Habitant. 404 USER_NOT_FOUND."
-          }
-        },
-        {
-          "name": "Unsuspend user",
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/unsuspend", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "unsuspend"] },
-            "description": "Lève la suspension d'un Habitant."
-          }
-        },
-        {
-          "name": "Create API key",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Yango — production\"\n}", "options": { "raw": { "language": "json" } } },
-            "url": { "raw": "{{baseUrl}}/admin/api-keys", "host": ["{{baseUrl}}"], "path": ["admin", "api-keys"] },
-            "description": "Crée une clé API. La clé en clair (bj_live_…) n'est renvoyée qu'ici — capture {{apiKey}}.",
-            "event": []
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const d = pm.response.json().data;",
-                  "if (d && d.key) pm.environment.set('apiKey', d.key);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Revoke API key",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtAdmin}}", "type": "string" }] },
-            "url": { "raw": "{{baseUrl}}/admin/api-keys/{{apiKeyId}}", "host": ["{{baseUrl}}"], "path": ["admin", "api-keys", "{{apiKeyId}}"] },
-            "description": "Révoque une clé API. 404 API_KEY_NOT_FOUND."
-          }
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
         }
-      ]
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}/discoverable",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}",
+        "discoverable"
+       ]
+      },
+      "description": "Bascule mapDiscoverable (retire/ajoute l'adresse de la carte browsable).",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"discoverable\": false\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "Deactivate address",
+     "request": {
+      "method": "DELETE",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}"
+       ]
+      },
+      "description": "Désactivation définitive par le propriétaire → 410 ensuite. 409 si déjà désactivée."
+     }
+    },
+    {
+     "name": "Public page",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}"
+       ]
+      },
+      "description": "Public, sans auth. 200 si publiée, 404 si jamais publiée/inexistante, 410 si désactivée."
+     }
+    },
+    {
+     "name": "Resolve (clé API)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{apiKey}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}/resolve",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}",
+        "resolve"
+       ]
+      },
+      "description": "Header Authorization: Bearer {{apiKey}} (bj_live_…). Résolution complète + métering. 401 si clé absente/invalide/révoquée/expirée."
+     }
+    },
+    {
+     "name": "Verify (clé API)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{apiKey}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}/verify",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}",
+        "verify"
+       ]
+      },
+      "description": "Moyenne /5 + nombre d'évaluations + published (clé API, météré VERIFY). averageRating null = aucune évaluation."
+     }
+    },
+    {
+     "name": "ETA (clé API)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{apiKey}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/addresses/{{addressCode}}/eta?fromLat=6.3600&fromLng=2.4100",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "addresses",
+        "{{addressCode}}",
+        "eta"
+       ],
+       "query": [
+        {
+         "key": "fromLat",
+         "value": "6.3600"
+        },
+        {
+         "key": "fromLng",
+         "value": "2.4100"
+        }
+       ]
+      },
+      "description": "Estimation ETA depuis une origine (fromLat/fromLng) vers l'adresse (clé API, météré ETA). Réponse: { code, origin, destination, etaMinutes, distanceMeters, source }. source=OSRM (routage réel) ou ESTIMATE (repli local gracieux). 400 si origine manquante/hors bornes, 404/410 comme resolve, 401 si clé invalide."
+     }
     }
-  ],
-  "variable": [
+   ]
+  },
+  {
+   "name": "Moderation",
+   "item": [
     {
-      "key": "baseUrl",
-      "value": "http://localhost:3000/api"
+     "name": "List pending revisions",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/revisions",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "revisions"
+       ]
+      },
+      "description": "File des révisions EN_ATTENTE_VALIDATION (Mod/Admin). Capture {{revisionId}} (1re entrée)."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d = pm.response.json().data;",
+         "if (Array.isArray(d) && d.length) pm.collectionVariables.set('revisionId', d[0].id);"
+        ]
+       }
+      }
+     ]
     },
     {
-      "key": "addressCode",
-      "value": ""
+     "name": "Approve revision",
+     "request": {
+      "method": "PATCH",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/revisions/{{revisionId}}/approve",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "revisions",
+        "{{revisionId}}",
+        "approve"
+       ]
+      },
+      "description": "Publie la révision et bascule le pointeur. L'ancienne version publiée passe ARCHIVEE."
+     }
     },
     {
-      "key": "revisionId",
-      "value": ""
+     "name": "Reject revision",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"reason\": \"Photo illisible\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/revisions/{{revisionId}}/reject",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "revisions",
+        "{{revisionId}}",
+        "reject"
+       ]
+      },
+      "description": "Rejette la révision (motif obligatoire). Le pointeur public reste inchangé."
+     }
     },
     {
-      "key": "reportId",
-      "value": ""
+     "name": "List reports",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/reports",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "reports"
+       ]
+      },
+      "description": "File 2 : signalements PENDING. Chaque item porte ownerInactiveOver90Days."
+     }
     },
     {
-      "key": "contributionId",
-      "value": ""
+     "name": "Resolve report",
+     "request": {
+      "method": "PATCH",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/reports/{{reportId}}/resolve",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "reports",
+        "{{reportId}}",
+        "resolve"
+       ]
+      },
+      "description": "Marque le signalement RESOLVED (adresse intacte)."
+     }
     },
     {
-      "key": "visitId",
-      "value": ""
+     "name": "Deactivate reported address",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/reports/{{reportId}}/deactivate",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "reports",
+        "{{reportId}}",
+        "deactivate"
+       ]
+      },
+      "description": "Désactive l'adresse signalée (motif facultatif). Adresse → 410 public.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"reason\": \"Adresse frauduleuse\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "List contributions",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/contributions",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "contributions"
+       ]
+      },
+      "description": "File 3 : contributions terrain PENDING."
+     }
+    },
+    {
+     "name": "Approve contribution",
+     "request": {
+      "method": "PATCH",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/contributions/{{contributionId}}/approve",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "contributions",
+        "{{contributionId}}",
+        "approve"
+       ]
+      },
+      "description": "Approuve → note terrain publique (jamais injectée dans steps)."
+     }
+    },
+    {
+     "name": "Reject contribution",
+     "request": {
+      "method": "PATCH",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtMod}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/moderation/contributions/{{contributionId}}/reject",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "moderation",
+        "contributions",
+        "{{contributionId}}",
+        "reject"
+       ]
+      },
+      "description": "Rejette la contribution."
+     }
     }
-  ]
+   ]
+  },
+  {
+   "name": "Quartiers",
+   "item": [
+    {
+     "name": "List active quartiers",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{baseUrl}}/quartiers",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "quartiers"
+       ]
+      },
+      "description": "Liste publique des quartiers actifs (id, name, prefix)."
+     }
+    },
+    {
+     "name": "Analytics (clé API + quota)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{apiKey}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/quartiers/{{quartierId}}/analytics",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "quartiers",
+        "{{quartierId}}",
+        "analytics"
+       ]
+      },
+      "description": "Analytics de quartier (clé API, météré ANALYTICS). Accès conditionné au ratio de remontée CONFIRM/RESOLVE >= 80% sur 30j. Réponse: { quartierId, quartierName, totalVisits, medianEtaMinutes, medianPriceFCFA, peakHours[], successRate, period }. 403 ANALYTICS_QUOTA_INSUFFICIENT si quota insuffisant, 404 QUARTIER_NOT_FOUND, 401 si clé invalide."
+     }
+    }
+   ]
+  },
+  {
+   "name": "Map",
+   "item": [
+    {
+     "name": "Browse map (bbox)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{baseUrl}}/map/addresses?north=6.41&south=6.40&east=2.41&west=2.40",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "map",
+        "addresses"
+       ],
+       "query": [
+        {
+         "key": "north",
+         "value": "6.41"
+        },
+        {
+         "key": "south",
+         "value": "6.40"
+        },
+        {
+         "key": "east",
+         "value": "2.41"
+        },
+        {
+         "key": "west",
+         "value": "2.40"
+        },
+        {
+         "key": "category",
+         "value": "COMMERCE",
+         "disabled": true
+        }
+       ]
+      },
+      "description": "Adresses publiées + découvrables dans une bbox. Matrice de visibilité appliquée côté serveur (domicile muet/preview null). category optionnel (décocher pour tout). Public."
+     }
+    }
+   ]
+  },
+  {
+   "name": "Visits",
+   "item": [
+    {
+     "name": "Start visit",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"addressCode\": \"{{addressCode}}\",\n  \"departAt\": \"2026-05-17T09:00:00Z\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/visits/start",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "visits",
+        "start"
+       ]
+      },
+      "description": "Départ de navigation (public, anonyme). 201 {visitId}. 404/410 si adresse non publiée."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d=pm.response.json().data;",
+         "if(d&&d.visitId)pm.collectionVariables.set('visitId',d.visitId);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Confirm visit (web)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"visitId\": \"{{visitId}}\",\n  \"arrivedAt\": \"2026-05-17T09:14:00Z\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/visits/confirm",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "visits",
+        "confirm"
+       ]
+      },
+      "description": "Confirmation web « J'y suis » (sans clé). 400 INVALID_VISIT_TIMESTAMPS si arrivée<départ, 404 VISIT_NOT_FOUND."
+     }
+    },
+    {
+     "name": "Confirm visit (clé API)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{apiKey}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"addressCode\": \"{{addressCode}}\",\n  \"departAt\": \"2026-05-17T09:00:00Z\",\n  \"arrivedAt\": \"2026-05-17T09:14:00Z\",\n  \"finalPrice\": 1500\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/visits/confirm",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "visits",
+        "confirm"
+       ]
+      },
+      "description": "Remontée intégrateur (clé bj_live_…). Crée une visite complète + métère CONFIRM."
+     }
+    }
+   ]
+  },
+  {
+   "name": "Upload",
+   "item": [
+    {
+     "name": "Get upload signature (habitant)",
+     "request": {
+      "method": "POST",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/upload/signature",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "upload",
+        "signature"
+       ]
+      },
+      "description": "Signature Cloudinary pour upload direct (habitant, JWT). 200 {signature, timestamp, apiKey, cloudName, folder, transformation}. Le frontend POST les octets directement a Cloudinary, jamais le backend. 503 UPLOAD_NOT_CONFIGURED si Cloudinary non configure."
+     },
+     "response": [
+      {
+       "name": "200 OK — charge utile signee",
+       "originalRequest": {
+        "method": "POST",
+        "header": [],
+        "url": {
+         "raw": "{{baseUrl}}/upload/signature",
+         "host": [
+          "{{baseUrl}}"
+         ],
+         "path": [
+          "upload",
+          "signature"
+         ]
+        }
+       },
+       "status": "OK",
+       "code": 200,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n  \"data\": {\n    \"signature\": \"a1b2c3d4e5f6...\",\n    \"timestamp\": 1747476000,\n    \"apiKey\": \"999888777\",\n    \"cloudName\": \"adressebj\",\n    \"folder\": \"adressebj/portals\",\n    \"transformation\": \"q_auto,f_auto\"\n  },\n  \"meta\": {\n    \"timestamp\": \"2026-06-17T10:00:00.000Z\"\n  }\n}"
+      },
+      {
+       "name": "401 — sans JWT",
+       "originalRequest": {
+        "method": "POST",
+        "header": [],
+        "url": {
+         "raw": "{{baseUrl}}/upload/signature",
+         "host": [
+          "{{baseUrl}}"
+         ],
+         "path": [
+          "upload",
+          "signature"
+         ]
+        }
+       },
+       "status": "Unauthorized",
+       "code": 401,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n  \"statusCode\": 401,\n  \"error\": \"Unauthorized\",\n  \"code\": \"UNAUTHORIZED\",\n  \"message\": \"Unauthorized\"\n}"
+      },
+      {
+       "name": "503 — UPLOAD_NOT_CONFIGURED",
+       "originalRequest": {
+        "method": "POST",
+        "header": [],
+        "url": {
+         "raw": "{{baseUrl}}/upload/signature",
+         "host": [
+          "{{baseUrl}}"
+         ],
+         "path": [
+          "upload",
+          "signature"
+         ]
+        }
+       },
+       "status": "Service Unavailable",
+       "code": 503,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n  \"statusCode\": 503,\n  \"error\": \"Service Unavailable\",\n  \"code\": \"UPLOAD_NOT_CONFIGURED\",\n  \"message\": \"Le service d'upload n'est pas configure.\"\n}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Admin",
+   "description": "Routes ADMIN strict (Authorization: Bearer {{jwtAdmin}}).",
+   "item": [
+    {
+     "name": "Create quartier",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Akpakpa\",\n  \"prefix\": \"AKP\",\n  \"centerLat\": 6.3676,\n  \"centerLng\": 2.4252\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/quartiers",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "quartiers"
+       ]
+      },
+      "description": "Crée un quartier. 409 QUARTIER_PREFIX_TAKEN si le préfixe existe."
+     }
+    },
+    {
+     "name": "Update quartier",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"isActive\": false\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/quartiers/{{quartierId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "quartiers",
+        "{{quartierId}}"
+       ]
+      },
+      "description": "Modifie / (dés)active un quartier. 404 QUARTIER_NOT_FOUND."
+     }
+    },
+    {
+     "name": "List addresses (supervision)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/addresses?page=1&limit=20",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "addresses"
+       ],
+       "query": [
+        {
+         "key": "page",
+         "value": "1"
+        },
+        {
+         "key": "limit",
+         "value": "20"
+        },
+        {
+         "key": "code",
+         "value": "AKP",
+         "disabled": true
+        },
+        {
+         "key": "lifecycle",
+         "value": "ACTIVE",
+         "disabled": true
+        },
+        {
+         "key": "category",
+         "value": "COMMERCE",
+         "disabled": true
+        },
+        {
+         "key": "quartierId",
+         "value": "{{quartierId}}",
+         "disabled": true
+        }
+       ]
+      },
+      "description": "Supervision du référentiel : filtres + pagination."
+     }
+    },
+    {
+     "name": "Create moderator",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"email\": \"moderateur@adressebj.bj\",\n  \"password\": \"motdepasse123\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/moderators",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "moderators"
+       ]
+      },
+      "description": "Crée un compte Modérateur. 409 EMAIL_ALREADY_REGISTERED."
+     }
+    },
+    {
+     "name": "Update moderator (deactivate/reactivate/reset)",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"action\": \"reset\",\n  \"password\": \"nouveaupass1\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/moderators/{{moderatorId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "moderators",
+        "{{moderatorId}}"
+       ]
+      },
+      "description": "action ∈ deactivate|reactivate|reset (password requis si reset). 404 MODERATOR_NOT_FOUND, 400 PASSWORD_REQUIRED."
+     }
+    },
+    {
+     "name": "Suspend user",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"reason\": \"Comportement abusif\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/users/{{userId}}/suspend",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "users",
+        "{{userId}}",
+        "suspend"
+       ]
+      },
+      "description": "Suspend un Habitant. 404 USER_NOT_FOUND."
+     }
+    },
+    {
+     "name": "Unsuspend user",
+     "request": {
+      "method": "PATCH",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/users/{{userId}}/unsuspend",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "users",
+        "{{userId}}",
+        "unsuspend"
+       ]
+      },
+      "description": "Lève la suspension d'un Habitant."
+     }
+    },
+    {
+     "name": "Create API key",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"label\": \"Yango — production\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/api-keys",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "api-keys"
+       ]
+      },
+      "description": "Crée une clé API. La clé en clair (bj_live_…) n'est renvoyée qu'ici — capture {{apiKey}}.",
+      "event": []
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "const d = pm.response.json().data;",
+         "if (d && d.key) pm.environment.set('apiKey', d.key);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "Revoke API key",
+     "request": {
+      "method": "DELETE",
+      "header": [],
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwtAdmin}}",
+         "type": "string"
+        }
+       ]
+      },
+      "url": {
+       "raw": "{{baseUrl}}/admin/api-keys/{{apiKeyId}}",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "admin",
+        "api-keys",
+        "{{apiKeyId}}"
+       ]
+      },
+      "description": "Révoque une clé API. 404 API_KEY_NOT_FOUND."
+     }
+    }
+   ]
+  }
+ ],
+ "variable": [
+  {
+   "key": "baseUrl",
+   "value": "http://localhost:3000/api"
+  },
+  {
+   "key": "addressCode",
+   "value": ""
+  },
+  {
+   "key": "revisionId",
+   "value": ""
+  },
+  {
+   "key": "reportId",
+   "value": ""
+  },
+  {
+   "key": "contributionId",
+   "value": ""
+  },
+  {
+   "key": "visitId",
+   "value": ""
+  }
+ ]
 }

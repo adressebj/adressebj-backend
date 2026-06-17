@@ -48,6 +48,7 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 | `VISIT_NOT_FOUND` | 404 | Visite (web) introuvable à la confirmation. |
 | `VISIT_ID_REQUIRED` | 400 | Confirmation web sans `visitId`. |
 | `VISIT_FIELDS_REQUIRED` | 400 | Remontée API sans `addressCode`/`departAt`. |
+| `UPLOAD_NOT_CONFIGURED` | 503 | Service d'upload (Cloudinary) non configuré côté serveur. |
 | … | … | _(compléter au fil des endpoints)_ |
 
 ## Comportements spéciaux à connaître
@@ -256,6 +257,28 @@ Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Beare
 - **API** (clé `bj_live_…`) — Body : `{ "addressCode": "AKP-7X3K", "departAt": "…", "arrivedAt": "…", "finalPrice": 1500 }`. Chaque appel est météré.
 - **Réponse 201** : `{ "data": { "visitId": "…", "recorded": true } }`.
 - **Erreurs** : `400 INVALID_VISIT_TIMESTAMPS` (arrivée < départ), `404 VISIT_NOT_FOUND` (web), `400 VISIT_ID_REQUIRED` / `400 VISIT_FIELDS_REQUIRED` (champs manquants selon le mode), `401 API_KEY_*` (clé fournie mais invalide).
+
+### `POST /upload/signature` — Signature d'upload photo (habitant, JWT)
+
+- **Auth** : `Authorization: Bearer <jwt>` (habitant). Sans JWT → `401`.
+- **Body** : aucun.
+- **Réponse 200** :
+
+```json
+{
+  "data": {
+    "signature": "a1b2c3…",
+    "timestamp": 1747476000,
+    "apiKey": "999888777",
+    "cloudName": "adressebj",
+    "folder": "adressebj/portals",
+    "transformation": "q_auto,f_auto"
+  }
+}
+```
+
+- **Usage frontend** : le client envoie les octets de la photo **directement à Cloudinary** (`POST https://api.cloudinary.com/v1_1/{cloudName}/image/upload`) avec `signature`, `timestamp`, `api_key`, `folder` et `transformation` repris tels quels. Le backend ne transporte **jamais** de binaire — il ne fait que signer. L'URL renvoyée par Cloudinary est ensuite passée en `photoUrl` lors de la création/édition d'adresse.
+- **Erreurs** : `503 UPLOAD_NOT_CONFIGURED` (identifiants Cloudinary absents côté serveur).
 
 ### `GET /quartiers` — Liste des quartiers actifs (public)
 
