@@ -1344,6 +1344,153 @@
    ]
   },
   {
+   "name": "Notifications",
+   "item": [
+    {
+     "name": "Subscribe push (habitant)",
+     "request": {
+      "method": "POST",
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/EXAMPLE\",\n  \"keys\": {\n    \"p256dh\": \"BNc...\",\n    \"auth\": \"k3y...\"\n  }\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/notifications/subscribe",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "notifications",
+        "subscribe"
+       ]
+      },
+      "description": "Enregistre un abonnement Web Push (habitant, JWT). Forme PushSubscription.toJSON() du navigateur. 201 {subscribed:true}. Idempotent par endpoint."
+     },
+     "response": [
+      {
+       "name": "201 — abonne",
+       "originalRequest": {
+        "method": "POST",
+        "header": [],
+        "url": {
+         "raw": "{{baseUrl}}/notifications/subscribe",
+         "host": [
+          "{{baseUrl}}"
+         ],
+         "path": [
+          "notifications",
+          "subscribe"
+         ]
+        }
+       },
+       "status": "Created",
+       "code": 201,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n  \"data\": {\n    \"subscribed\": true\n  },\n  \"meta\": {\n    \"timestamp\": \"2026-06-17T10:00:00.000Z\"\n  }\n}"
+      }
+     ]
+    },
+    {
+     "name": "List notifications (habitant)",
+     "request": {
+      "method": "GET",
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "header": [],
+      "url": {
+       "raw": "{{baseUrl}}/notifications",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "notifications"
+       ]
+      },
+      "description": "Historique des notifications de l'habitant (plus recentes d'abord). type in ADDRESS_VALIDATED|ADDRESS_REJECTED|RELIABILITY_WARNING|ADDRESS_DEACTIVATED."
+     },
+     "response": []
+    },
+    {
+     "name": "Unsubscribe push (habitant)",
+     "request": {
+      "method": "DELETE",
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{jwt}}",
+         "type": "string"
+        }
+       ]
+      },
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/EXAMPLE\"\n}",
+       "options": {
+        "raw": {
+         "language": "json"
+        }
+       }
+      },
+      "url": {
+       "raw": "{{baseUrl}}/notifications/unsubscribe",
+       "host": [
+        "{{baseUrl}}"
+       ],
+       "path": [
+        "notifications",
+        "unsubscribe"
+       ]
+      },
+      "description": "Desinscrit un endpoint push de l'habitant courant. 200 {unsubscribed:bool}. Idempotent."
+     },
+     "response": []
+    }
+   ]
+  },
+  {
    "name": "Upload",
    "item": [
     {

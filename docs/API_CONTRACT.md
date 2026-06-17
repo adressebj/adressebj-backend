@@ -280,6 +280,30 @@ Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Beare
 - **Usage frontend** : le client envoie les octets de la photo **directement à Cloudinary** (`POST https://api.cloudinary.com/v1_1/{cloudName}/image/upload`) avec `signature`, `timestamp`, `api_key`, `folder` et `transformation` repris tels quels. Le backend ne transporte **jamais** de binaire — il ne fait que signer. L'URL renvoyée par Cloudinary est ensuite passée en `photoUrl` lors de la création/édition d'adresse.
 - **Erreurs** : `503 UPLOAD_NOT_CONFIGURED` (identifiants Cloudinary absents côté serveur).
 
+### Notifications (habitant, JWT)
+
+> Réservé au rôle `HABITANT`. Le frontend gère l'abonnement Web Push (service worker) ; le backend signe, persiste et pousse. Les notifications sont **toujours persistées** (consultables ici), l'envoi push est best-effort.
+
+#### `POST /notifications/subscribe` — Enregistrer un abonnement push
+
+- **Auth** : `Authorization: Bearer <jwt>`.
+- **Body** : la forme `PushSubscription.toJSON()` du navigateur : `{ "endpoint": "https://…", "keys": { "p256dh": "…", "auth": "…" } }`.
+- **Réponse 201** : `{ "data": { "subscribed": true } }`. Idempotent (ré-abonnement par `endpoint` = mise à jour).
+
+#### `DELETE /notifications/unsubscribe` — Se désinscrire
+
+- **Auth** : `Authorization: Bearer <jwt>`.
+- **Body** : `{ "endpoint": "https://…" }`.
+- **Réponse 200** : `{ "data": { "unsubscribed": true } }` (`false` si aucun abonnement correspondant — idempotent).
+
+#### `GET /notifications` — Historique des notifications
+
+- **Auth** : `Authorization: Bearer <jwt>`.
+- **Réponse 200** : `{ "data": [ { "id", "type", "message", "addressCode", "readAt", "createdAt" } ] }`, plus récentes d'abord.
+- **`type`** ∈ `ADDRESS_VALIDATED` · `ADDRESS_REJECTED` · `RELIABILITY_WARNING` · `ADDRESS_DEACTIVATED`. `addressCode` peut être `null` (adresse supprimée). `readAt: null` = non lue.
+
+> **Déclencheurs** (côté serveur, automatiques) : validation d'une révision (`ADDRESS_VALIDATED`), rejet d'une révision avec motif (`ADDRESS_REJECTED`), désactivation par la modération (`ADDRESS_DEACTIVATED`), et franchissement à la baisse du seuil de fiabilité moyenne < 2,5/5 au-delà de 3 évaluations (`RELIABILITY_WARNING`).
+
 ### `GET /quartiers` — Liste des quartiers actifs (public)
 
 - **Auth** : aucune.
