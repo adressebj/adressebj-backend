@@ -10,6 +10,7 @@ import { LocalisationsModule } from './localisations/localisations.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QuartiersModule } from './quartiers/quartiers.module';
+import { UploadModule } from './upload/upload.module';
 import { VisitsModule } from './visits/visits.module';
 
 @Module({
@@ -24,6 +25,7 @@ import { VisitsModule } from './visits/visits.module';
     ContributionsModule,
     ModerationModule,
     VisitsModule,
+    UploadModule,
     AdminModule,
     HealthModule,
   ],
