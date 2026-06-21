@@ -10,6 +10,7 @@ databases:
   - name: adressebj-db
     databaseName: adressebj
     plan: free
+    region: frankfurt # DOIT être la même région que le service (réseau privé régional)
     postgresMajorVersion: '16'
 
 services:
