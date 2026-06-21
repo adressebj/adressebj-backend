@@ -57,13 +57,12 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
-      # Africa's Talking (OTP SMS).
-      - key: AT_USERNAME
-        sync: false
-      - key: AT_API_KEY
-        sync: false
-      - key: AT_SENDER_ID
-        sync: false
+      # Africa's Talking (OTP SMS) — VOLONTAIREMENT ABSENT.
+      # L'intégration SDK n'est pas encore codée (SmsService = stub). Tant qu'elle
+      # ne l'est pas, NE PAS définir AT_USERNAME/AT_API_KEY : leur présence bascule
+      # SmsService en mode « activé » qui n'envoie rien ET ne logue plus le code.
+      # Sans ces vars, le provider dev journalise le code OTP (lisible dans les
+      # logs Render) → inscription testable. À rebrancher au passage en live.
       # Web Push (VAPID) — sans ces clés, notifications persistées non poussées.
       - key: VAPID_PUBLIC_KEY
         sync: false
