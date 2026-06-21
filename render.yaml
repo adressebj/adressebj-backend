@@ -23,7 +23,9 @@ services:
     # Les migrations tournent au DÉMARRAGE, pas au build : l'hôte interne de la
     # base (dpg-…-a) ne résout qu'au runtime. `migrate deploy` est idempotent
     # (no-op si à jour). Le plan gratuit n'a pas de preDeployCommand.
-    buildCommand: npm install && npx prisma generate && npm run build
+    # --include=dev : NODE_ENV=production fait sauter les devDeps à npm install,
+    # or le build a besoin de @nestjs/cli (nest), typescript, etc.
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
     startCommand: npx prisma migrate deploy && node dist/main.js
     healthCheckPath: /api/health
     envVars:
