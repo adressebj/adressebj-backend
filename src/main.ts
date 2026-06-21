@@ -37,7 +37,7 @@ async function bootstrap() {
     .setDescription(
       "API REST d'AdresseBJ — infrastructure d'adressage numérique du Bénin",
     )
-    .setVersion('0.2.2')
+    .setVersion('0.2.3')
     .addBearerAuth()
     // Clé API intégrateur : transmise comme `Authorization: Bearer bj_live_…`
     // (cf. ApiKeyGuard), donc schéma HTTP bearer — pas un header x-api-key.
