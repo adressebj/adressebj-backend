@@ -18,6 +18,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt # région gratuite la plus proche du Bénin
+    repo: https://github.com/adressebj/adressebj-backend
     branch: main
     # migrate deploy au build : le plan gratuit n'a pas de preDeployCommand.
     buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
