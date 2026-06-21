@@ -88,6 +88,52 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 - **Réponse 200** : `{ "data": { "deleted": true, "anonymizedAt": "2026-05-17T10:00:00Z" } }`.
 - **Erreurs** : `400 PHONE_MISMATCH` (le numéro ne correspond pas), `401` (sans JWT).
 
+### `POST /addresses` — Créer une adresse (habitant)
+
+- **Auth** : `Authorization: Bearer <jwt habitant>`.
+- **Body** :
+
+```json
+{
+  "category": "COMMERCE",
+  "steps": ["Partir du carrefour", "Boutique verte"],
+  "photoUrl": "https://res.cloudinary.com/.../photo.jpg",
+  "gpsLat": 6.3662,
+  "gpsLng": 2.3912
+}
+```
+
+- `category` ∈ `DOMICILE | COMMERCE | SERVICE_PUBLIC | SANTE | EDUCATION | AUTRE`. `steps` : 1 à 20 étapes, chacune 1–280 car. `photoUrl` : URL absolue (obtenue via `POST /upload/signature` puis upload direct Cloudinary). `gpsLat`/`gpsLng` : position du portail.
+- **Le client ne fournit jamais de `localisationId`** : la localisation est résolue côté serveur depuis le GPS (rattachement à une localisation existante dans un rayon de 15 m, sinon création), et le quartier en est déduit.
+- **Réponse 201** : `{ "data": { "code": "AKP-7X3K", "lifecycle": "ACTIVE", "revisionStatus": "EN_ATTENTE_VALIDATION" } }`.
+- La création produit la **révision n°1**, soumise à modération : l'adresse existe (`code` permanent) mais **n'est pas encore publique** tant que la révision n'est pas approuvée (`GET /addresses/:code` renvoie alors `404`).
+- **Erreurs** : `400` de validation (catégorie/étapes/photo/GPS), `400 COORDINATES_OUT_OF_COVERAGE` (GPS hors de tout quartier couvert), `409 ADDRESS_ALREADY_EXISTS_AT_LOCATION` (l'habitant a déjà une adresse sur cette localisation).
+
+### `GET /addresses/mine` — Mes adresses (habitant)
+
+- **Auth** : `Authorization: Bearer <jwt habitant>`.
+- **Réponse 200** : tableau des adresses de l'habitant, du plus récent au plus ancien.
+
+```json
+{
+  "data": [
+    {
+      "code": "AKP-7X3K",
+      "lifecycle": "ACTIVE",
+      "mapDiscoverable": true,
+      "published": true,
+      "category": "COMMERCE",
+      "currentRevisionStatus": "PUBLIEE",
+      "createdAt": "2026-05-17T10:00:00Z"
+    }
+  ]
+}
+```
+
+- `published` = `true` dès qu'une version a été approuvée et est servie publiquement ; une adresse fraîchement créée a `published: false` et `currentRevisionStatus: "EN_ATTENTE_VALIDATION"`. `category` reflète la version publiée si elle existe, sinon la dernière révision en date.
+- `currentRevisionStatus` ∈ `EN_ATTENTE_VALIDATION | PUBLIEE | REJETEE | ARCHIVEE | OBSOLETE` (ou `null` si aucune révision). C'est le statut qui pilote l'affichage de l'état côté espace habitant (en attente, publiée, refusée + motif via la page de détail).
+- **Erreurs** : `401` (sans JWT).
+
 ### `GET /addresses/:code` — Page publique (visiteur)
 
 - **Auth** : aucune (public). Appelable depuis le navigateur, y compris pour les métadonnées de partage (og:tags WhatsApp).
