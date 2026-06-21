@@ -20,9 +20,11 @@ services:
     region: frankfurt # région gratuite la plus proche du Bénin
     repo: https://github.com/adressebj/adressebj-backend
     branch: main
-    # migrate deploy au build : le plan gratuit n'a pas de preDeployCommand.
-    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
-    startCommand: node dist/main.js
+    # Les migrations tournent au DÉMARRAGE, pas au build : l'hôte interne de la
+    # base (dpg-…-a) ne résout qu'au runtime. `migrate deploy` est idempotent
+    # (no-op si à jour). Le plan gratuit n'a pas de preDeployCommand.
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && node dist/main.js
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
