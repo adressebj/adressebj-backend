@@ -37,7 +37,7 @@ async function bootstrap() {
     .setDescription(
       "API REST d'AdresseBJ — infrastructure d'adressage numérique du Bénin",
     )
-    .setVersion('0.1.0')
+    .setVersion('0.2.0')
     .addBearerAuth()
     .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'api-key')
     .build();
