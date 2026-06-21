@@ -37,9 +37,18 @@ async function bootstrap() {
     .setDescription(
       "API REST d'AdresseBJ — infrastructure d'adressage numérique du Bénin",
     )
-    .setVersion('0.2.0')
+    .setVersion('0.2.1')
     .addBearerAuth()
-    .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'api-key')
+    // Clé API intégrateur : transmise comme `Authorization: Bearer bj_live_…`
+    // (cf. ApiKeyGuard), donc schéma HTTP bearer — pas un header x-api-key.
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        description: 'Clé API intégrateur (bj_live_…)',
+      },
+      'api-key',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
