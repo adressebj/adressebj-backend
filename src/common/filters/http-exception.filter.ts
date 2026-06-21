@@ -40,7 +40,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     const body = this.buildBody(exception, status);
 
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status >= Number(HttpStatus.INTERNAL_SERVER_ERROR)) {
       this.logger.error(
         `${request.method} ${request.url} → ${status} ${body.code}`,
         exception instanceof Error ? exception.stack : undefined,

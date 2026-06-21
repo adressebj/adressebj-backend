@@ -7,6 +7,8 @@ import {
 import { AddressCategory, ApiEndpoint, RevisionStatus } from '@prisma/client';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { LocalisationsService } from '../localisations/localisations.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { RoutingService } from '../common/routing/routing.service';
 import { AddressesService } from './addresses.service';
 
 function buildPrismaMock() {
@@ -43,6 +45,8 @@ describe('AddressesService', () => {
   let prisma: ReturnType<typeof buildPrismaMock>;
   let localisations: { resolveOrCreate: jest.Mock; cleanupIfEmpty: jest.Mock };
   let apiKeys: { logRequest: jest.Mock };
+  let routing: { getEta: jest.Mock };
+  let notifications: { notifyOwner: jest.Mock };
   let service: AddressesService;
 
   beforeEach(() => {
@@ -52,10 +56,14 @@ describe('AddressesService', () => {
       cleanupIfEmpty: jest.fn().mockResolvedValue(undefined),
     };
     apiKeys = { logRequest: jest.fn().mockResolvedValue(undefined) };
+    routing = { getEta: jest.fn() };
+    notifications = { notifyOwner: jest.fn().mockResolvedValue(undefined) };
     service = new AddressesService(
       prisma as never,
       localisations as unknown as LocalisationsService,
       apiKeys as unknown as ApiKeysService,
+      routing as unknown as RoutingService,
+      notifications as unknown as NotificationsService,
     );
   });
 
@@ -158,6 +166,7 @@ describe('AddressesService', () => {
   const publishedAddress = {
     id: 'addr-1',
     code: 'AKP-7X3K',
+    userId: 'owner-1',
     lifecycle: 'ACTIVE',
     publishedRevisionId: 'rev-1',
     publishedRevision: {
@@ -278,7 +287,11 @@ describe('AddressesService', () => {
 
       const res = await service.rate('user-1', 'AKP-7X3K', 4);
 
-      expect(res).toEqual({ recorded: true, averageRating: 3.8, ratingCount: 13 });
+      expect(res).toEqual({
+        recorded: true,
+        averageRating: 3.8,
+        ratingCount: 13,
+      });
       expect(prisma.rating.upsert).toHaveBeenCalledWith({
         where: { userId_addressId: { userId: 'user-1', addressId: 'addr-1' } },
         create: { userId: 'user-1', addressId: 'addr-1', stars: 4 },
@@ -286,13 +299,18 @@ describe('AddressesService', () => {
       });
     });
 
-    it.each([0, 6, 3.5])('rejette une note hors bornes (%s) → INVALID_RATING', async (stars) => {
-      await expect(service.rate('user-1', 'AKP-7X3K', stars)).rejects.toMatchObject({
-        response: { code: 'INVALID_RATING' },
-      });
-      expect(prisma.address.findUnique).not.toHaveBeenCalled();
-      expect(prisma.rating.upsert).not.toHaveBeenCalled();
-    });
+    it.each([0, 6, 3.5])(
+      'rejette une note hors bornes (%s) → INVALID_RATING',
+      async (stars) => {
+        await expect(
+          service.rate('user-1', 'AKP-7X3K', stars),
+        ).rejects.toMatchObject({
+          response: { code: 'INVALID_RATING' },
+        });
+        expect(prisma.address.findUnique).not.toHaveBeenCalled();
+        expect(prisma.rating.upsert).not.toHaveBeenCalled();
+      },
+    );
 
     it('404 si adresse non publiée (avant tout upsert)', async () => {
       prisma.address.findUnique.mockResolvedValue(null);
@@ -300,6 +318,47 @@ describe('AddressesService', () => {
         NotFoundException,
       );
       expect(prisma.rating.upsert).not.toHaveBeenCalled();
+    });
+
+    it('alerte le propriétaire au franchissement du seuil de fiabilité', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.upsert.mockResolvedValue({});
+      // avant : moyenne saine (3.0, 4 notes) ; après : dégradée (2.4, 5 notes)
+      prisma.rating.aggregate
+        .mockResolvedValueOnce({ _avg: { stars: 3.0 }, _count: { stars: 4 } })
+        .mockResolvedValueOnce({ _avg: { stars: 2.4 }, _count: { stars: 5 } });
+
+      await service.rate('user-1', 'AKP-7X3K', 1);
+
+      expect(notifications.notifyOwner).toHaveBeenCalledWith(
+        'owner-1',
+        expect.objectContaining({ type: 'RELIABILITY_WARNING' }),
+      );
+    });
+
+    it("n'alerte pas si la moyenne reste sous le seuil (déjà dégradée)", async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.upsert.mockResolvedValue({});
+      // avant déjà sous le seuil → pas de nouveau franchissement
+      prisma.rating.aggregate
+        .mockResolvedValueOnce({ _avg: { stars: 2.0 }, _count: { stars: 5 } })
+        .mockResolvedValueOnce({ _avg: { stars: 1.8 }, _count: { stars: 6 } });
+
+      await service.rate('user-1', 'AKP-7X3K', 1);
+
+      expect(notifications.notifyOwner).not.toHaveBeenCalled();
+    });
+
+    it("n'alerte pas sous le minimum d'évaluations", async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      prisma.rating.upsert.mockResolvedValue({});
+      prisma.rating.aggregate
+        .mockResolvedValueOnce({ _avg: { stars: null }, _count: { stars: 0 } })
+        .mockResolvedValueOnce({ _avg: { stars: 1.0 }, _count: { stars: 2 } });
+
+      await service.rate('user-1', 'AKP-7X3K', 1);
+
+      expect(notifications.notifyOwner).not.toHaveBeenCalled();
     });
   });
 
@@ -319,7 +378,10 @@ describe('AddressesService', () => {
         averageRating: 3.7,
         ratingCount: 12,
       });
-      expect(apiKeys.logRequest).toHaveBeenCalledWith('key-1', ApiEndpoint.VERIFY);
+      expect(apiKeys.logRequest).toHaveBeenCalledWith(
+        'key-1',
+        ApiEndpoint.VERIFY,
+      );
     });
 
     it('410 si désactivée (pas de métering)', async () => {
@@ -331,6 +393,61 @@ describe('AddressesService', () => {
       await expect(service.verify('AKP-7X3K', 'key-1')).rejects.toThrow(
         GoneException,
       );
+      expect(apiKeys.logRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('eta', () => {
+    const origin = { lat: 6.36, lng: 2.41 };
+
+    it('délègue au RoutingService (destination = GPS Localisation) et métère ETA', async () => {
+      prisma.address.findUnique.mockResolvedValue(publishedAddress);
+      routing.getEta.mockResolvedValue({
+        etaMinutes: 11,
+        distanceMeters: 4200,
+        source: 'OSRM',
+      });
+
+      const res = await service.eta('AKP-7X3K', origin, 'key-1');
+
+      expect(routing.getEta).toHaveBeenCalledWith(origin, {
+        lat: 6.3676,
+        lng: 2.4252,
+      });
+      expect(res).toEqual({
+        code: 'AKP-7X3K',
+        origin,
+        destination: { lat: 6.3676, lng: 2.4252 },
+        etaMinutes: 11,
+        distanceMeters: 4200,
+        source: 'OSRM',
+      });
+      expect(apiKeys.logRequest).toHaveBeenCalledWith('key-1', ApiEndpoint.ETA);
+    });
+
+    it('404 si jamais publiée — pas de routage ni de métering', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        ...publishedAddress,
+        publishedRevisionId: null,
+        publishedRevision: null,
+      });
+      await expect(service.eta('AKP-7X3K', origin, 'key-1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(routing.getEta).not.toHaveBeenCalled();
+      expect(apiKeys.logRequest).not.toHaveBeenCalled();
+    });
+
+    it('410 si désactivée — pas de routage ni de métering', async () => {
+      prisma.address.findUnique.mockResolvedValue({
+        ...publishedAddress,
+        lifecycle: 'DESACTIVEE',
+        deactivatedAt: new Date('2026-03-14'),
+      });
+      await expect(service.eta('AKP-7X3K', origin, 'key-1')).rejects.toThrow(
+        GoneException,
+      );
+      expect(routing.getEta).not.toHaveBeenCalled();
       expect(apiKeys.logRequest).not.toHaveBeenCalled();
     });
   });
@@ -374,7 +491,11 @@ describe('AddressesService', () => {
         userId: 'owner-9',
       });
       const res = await service.resolvePublishedAddress('AKP-7X3K');
-      expect(res).toEqual({ id: 'addr-1', code: 'AKP-7X3K', ownerId: 'owner-9' });
+      expect(res).toEqual({
+        id: 'addr-1',
+        code: 'AKP-7X3K',
+        ownerId: 'owner-9',
+      });
     });
   });
 
@@ -386,12 +507,18 @@ describe('AddressesService', () => {
         {
           code: 'CAD-3M9P',
           localisation: { gpsLat: 6.366, gpsLng: 2.421 },
-          publishedRevision: { category: 'COMMERCE', photoUrl: 'https://x/c.jpg' },
+          publishedRevision: {
+            category: 'COMMERCE',
+            photoUrl: 'https://x/c.jpg',
+          },
         },
         {
           code: 'AKP-7X3K',
           localisation: { gpsLat: 6.367, gpsLng: 2.425 },
-          publishedRevision: { category: 'DOMICILE', photoUrl: 'https://x/d.jpg' },
+          publishedRevision: {
+            category: 'DOMICILE',
+            photoUrl: 'https://x/d.jpg',
+          },
         },
       ]);
 
@@ -498,7 +625,9 @@ describe('AddressesService', () => {
       prisma.addressRevision.findFirst.mockResolvedValue({ id: 'rev-pending' });
       await expect(
         service.update('owner-1', 'AKP-7X3K', updateDto),
-      ).rejects.toMatchObject({ response: { code: 'REVISION_ALREADY_PENDING' } });
+      ).rejects.toMatchObject({
+        response: { code: 'REVISION_ALREADY_PENDING' },
+      });
       expect(prisma.addressRevision.create).not.toHaveBeenCalled();
     });
 
@@ -523,7 +652,9 @@ describe('AddressesService', () => {
       });
       await expect(
         service.update('owner-1', 'AKP-7X3K', updateDto),
-      ).rejects.toMatchObject({ response: { code: 'ADDRESS_ALREADY_DEACTIVATED' } });
+      ).rejects.toMatchObject({
+        response: { code: 'ADDRESS_ALREADY_DEACTIVATED' },
+      });
     });
   });
 
@@ -575,7 +706,10 @@ describe('AddressesService', () => {
         }),
       );
       expect(revUpdateMany).toHaveBeenCalledWith({
-        where: { addressId: 'addr-1', status: RevisionStatus.EN_ATTENTE_VALIDATION },
+        where: {
+          addressId: 'addr-1',
+          status: RevisionStatus.EN_ATTENTE_VALIDATION,
+        },
         data: { status: RevisionStatus.OBSOLETE },
       });
       expect(localisations.cleanupIfEmpty).toHaveBeenCalledWith('loc-1');
@@ -586,9 +720,11 @@ describe('AddressesService', () => {
         ...ownedAddress,
         lifecycle: 'DESACTIVEE',
       });
-      await expect(service.deactivate('owner-1', 'AKP-7X3K')).rejects.toMatchObject(
-        { response: { code: 'ADDRESS_ALREADY_DEACTIVATED' } },
-      );
+      await expect(
+        service.deactivate('owner-1', 'AKP-7X3K'),
+      ).rejects.toMatchObject({
+        response: { code: 'ADDRESS_ALREADY_DEACTIVATED' },
+      });
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });

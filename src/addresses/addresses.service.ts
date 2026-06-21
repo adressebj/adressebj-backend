@@ -7,15 +7,31 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { AddressCategory, ApiEndpoint, RevisionStatus } from '@prisma/client';
+import {
+  AddressCategory,
+  ApiEndpoint,
+  NotificationType,
+  RevisionStatus,
+} from '@prisma/client';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { LocalisationsService } from '../localisations/localisations.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  EtaSource,
+  GeoPoint,
+  RoutingService,
+} from '../common/routing/routing.service';
 import { buildAssembledText, generateSequence } from './address-code';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
 
 const MAX_CODE_ATTEMPTS = 50;
+
+/** Seuil de moyenne sous lequel le propriétaire est alerté d'une dégradation de fiabilité. */
+const RELIABILITY_WARNING_THRESHOLD = 2.5;
+/** Nombre minimal d'évaluations avant qu'une moyenne basse soit jugée significative. */
+const RELIABILITY_WARNING_MIN_RATINGS = 3;
 
 export interface CreatedAddress {
   code: string;
@@ -61,6 +77,15 @@ export interface RateResult extends RatingSummary {
 export interface VerifyResult extends RatingSummary {
   code: string;
   published: true;
+}
+
+export interface EtaResponse {
+  code: string;
+  origin: GeoPoint;
+  destination: GeoPoint;
+  etaMinutes: number;
+  distanceMeters: number;
+  source: EtaSource;
 }
 
 export interface PublicAddress {
@@ -127,6 +152,8 @@ export class AddressesService {
     private readonly prisma: PrismaService,
     private readonly localisations: LocalisationsService,
     private readonly apiKeys: ApiKeysService,
+    private readonly routing: RoutingService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Génère un code unique pour un préfixe de quartier (vérif d'unicité avant persistance). */
@@ -359,13 +386,52 @@ export class AddressesService {
       });
     }
     const address = await this.loadResolvable(code);
+    const before = await this.aggregateRatings(address.id);
     await this.prisma.rating.upsert({
       where: { userId_addressId: { userId, addressId: address.id } },
       create: { userId, addressId: address.id, stars },
       update: { stars },
     });
     const summary = await this.aggregateRatings(address.id);
+
+    await this.maybeWarnReliability(
+      address.userId,
+      address.id,
+      code,
+      before,
+      summary,
+    );
     return { recorded: true, ...summary };
+  }
+
+  /**
+   * Alerte le propriétaire **uniquement au franchissement** du seuil de fiabilité
+   * (moyenne précédente saine → moyenne désormais sous le seuil), au-delà d'un
+   * minimum d'évaluations. Best-effort : ne fait jamais échouer la notation.
+   */
+  private async maybeWarnReliability(
+    ownerId: string,
+    addressId: string,
+    code: string,
+    before: RatingSummary,
+    after: RatingSummary,
+  ): Promise<void> {
+    const wasHealthy =
+      before.averageRating == null ||
+      before.averageRating >= RELIABILITY_WARNING_THRESHOLD;
+    const nowDegraded =
+      after.averageRating != null &&
+      after.ratingCount >= RELIABILITY_WARNING_MIN_RATINGS &&
+      after.averageRating < RELIABILITY_WARNING_THRESHOLD;
+
+    if (wasHealthy && nowDegraded) {
+      await this.notifications.notifyOwner(ownerId, {
+        type: NotificationType.RELIABILITY_WARNING,
+        message: `La fiabilité de votre adresse ${code} a baissé (note moyenne ${after.averageRating}/5).`,
+        addressId,
+        url: `/dashboard/address/${code}`,
+      });
+    }
   }
 
   /**
@@ -377,6 +443,35 @@ export class AddressesService {
     await this.apiKeys.logRequest(apiKeyId, ApiEndpoint.VERIFY);
     const summary = await this.aggregateRatings(address.id);
     return { code: address.code, published: true, ...summary };
+  }
+
+  /**
+   * Estimation ETA (intégrateurs, clé API) depuis une origine GPS vers l'adresse publiée.
+   * La destination est le GPS **figé de la Localisation** (jamais celui de la révision).
+   * Délègue au RoutingService (OSRM, repli local gracieux). Chaque appel est météré (ETA).
+   * Mêmes règles 404/410 que resolve/verify.
+   */
+  async eta(
+    code: string,
+    origin: GeoPoint,
+    apiKeyId: string,
+  ): Promise<EtaResponse> {
+    const address = await this.loadResolvable(code);
+    await this.apiKeys.logRequest(apiKeyId, ApiEndpoint.ETA);
+
+    const destination: GeoPoint = {
+      lat: address.localisation!.gpsLat,
+      lng: address.localisation!.gpsLng,
+    };
+    const result = await this.routing.getEta(origin, destination);
+    return {
+      code: address.code,
+      origin,
+      destination,
+      etaMinutes: result.etaMinutes,
+      distanceMeters: result.distanceMeters,
+      source: result.source,
+    };
   }
 
   /** Signalement d'une adresse par un habitant (file de modération n°2). */

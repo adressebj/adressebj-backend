@@ -1,9 +1,29 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AuthResult, AuthService } from './auth.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import {
+  AccountDeletionResult,
+  AuthResult,
+  AuthService,
+  PublicUser,
+} from './auth.service';
+import { ChangePhoneDto } from './dto/change-phone.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AuthUser } from './types/jwt-payload';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -32,5 +52,39 @@ export class AuthController {
   })
   login(@Body() dto: LoginDto): Promise<AuthResult> {
     return this.auth.login(dto);
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Modifier son profil (nom, prénom, email)' })
+  updateProfile(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateProfileDto,
+  ): Promise<PublicUser> {
+    return this.auth.updateProfile(user.id, dto);
+  }
+
+  @Patch('phone')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Changer de numéro (OTP requis sur le nouveau)' })
+  changePhone(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePhoneDto,
+  ): Promise<PublicUser> {
+    return this.auth.changePhone(user.id, dto);
+  }
+
+  @Delete('account')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Supprimer son compte (anonymisation immédiate)' })
+  deleteAccount(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: DeleteAccountDto,
+  ): Promise<AccountDeletionResult> {
+    return this.auth.deleteAccount(user.id, dto.phone);
   }
 }

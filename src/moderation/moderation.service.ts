@@ -5,10 +5,12 @@ import {
 } from '@nestjs/common';
 import {
   ContributionStatus,
+  NotificationType,
   ReportStatus,
   RevisionStatus,
 } from '@prisma/client';
 import { LocalisationsService } from '../localisations/localisations.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Au-delà de cette inactivité du propriétaire, un signalement est présenté avec présomption de validité. */
@@ -67,6 +69,7 @@ export class ModerationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly localisations: LocalisationsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** File 1 : révisions en attente (créations + modifications). */
@@ -129,7 +132,12 @@ export class ModerationService {
       }
     });
 
-    // TODO(notifications): notifier l'auteur (ADDRESS_VALIDATED) — module à venir.
+    await this.notifications.notifyOwner(revision.address.userId, {
+      type: NotificationType.ADDRESS_VALIDATED,
+      message: `Votre adresse ${revision.address.code} a été validée et est maintenant publique.`,
+      addressId: revision.addressId,
+      url: `/dashboard/address/${revision.address.code}`,
+    });
     return {
       id: revision.id,
       status: RevisionStatus.PUBLIEE,
@@ -156,7 +164,12 @@ export class ModerationService {
       },
     });
 
-    // TODO(notifications): notifier l'auteur (ADDRESS_REJECTED + motif) — module à venir.
+    await this.notifications.notifyOwner(revision.address.userId, {
+      type: NotificationType.ADDRESS_REJECTED,
+      message: `Votre adresse ${revision.address.code} a été rejetée. Motif : ${reason}`,
+      addressId: revision.addressId,
+      url: `/dashboard/address/${revision.address.code}/edit`,
+    });
     return {
       id: revision.id,
       status: RevisionStatus.REJETEE,
@@ -264,7 +277,14 @@ export class ModerationService {
       await this.localisations.cleanupIfEmpty(report.address.localisationId);
     }
 
-    // TODO(notifications): notifier le propriétaire (ADDRESS_DEACTIVATED + motif).
+    await this.notifications.notifyOwner(report.address.userId, {
+      type: NotificationType.ADDRESS_DEACTIVATED,
+      message: reason
+        ? `Votre adresse ${report.address.code} a été désactivée par la modération. Motif : ${reason}`
+        : `Votre adresse ${report.address.code} a été désactivée par la modération.`,
+      addressId: report.addressId,
+      url: `/dashboard/address/${report.address.code}`,
+    });
     return {
       id: report.id,
       status: ReportStatus.ACTIONED,
@@ -355,7 +375,12 @@ export class ModerationService {
       where: { id: reportId },
       include: {
         address: {
-          select: { code: true, lifecycle: true, localisationId: true },
+          select: {
+            code: true,
+            lifecycle: true,
+            localisationId: true,
+            userId: true,
+          },
         },
       },
     });
@@ -378,7 +403,9 @@ export class ModerationService {
     const revision = await this.prisma.addressRevision.findUnique({
       where: { id: revisionId },
       include: {
-        address: { select: { code: true, publishedRevisionId: true } },
+        address: {
+          select: { code: true, publishedRevisionId: true, userId: true },
+        },
       },
     });
     if (!revision) {

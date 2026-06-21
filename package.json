@@ -1,6 +1,6 @@
 {
   "name": "adressebj-backend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "API REST d'AdresseBJ — infrastructure d'adressage numérique du Bénin",
   "author": "BADAROU Mouwafic",
   "private": true,
@@ -37,12 +37,14 @@
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "cloudinary": "^2.10.0",
     "dotenv": "^17.4.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",
@@ -56,6 +58,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^6.0.3",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9.37.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",

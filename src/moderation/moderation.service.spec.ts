@@ -5,6 +5,7 @@ import {
   RevisionStatus,
 } from '@prisma/client';
 import { LocalisationsService } from '../localisations/localisations.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ModerationService } from './moderation.service';
 
 function buildPrismaMock() {
@@ -29,14 +30,17 @@ function buildPrismaMock() {
 describe('ModerationService', () => {
   let prisma: ReturnType<typeof buildPrismaMock>;
   let localisations: { cleanupIfEmpty: jest.Mock };
+  let notifications: { notifyOwner: jest.Mock };
   let service: ModerationService;
 
   beforeEach(() => {
     prisma = buildPrismaMock();
     localisations = { cleanupIfEmpty: jest.fn().mockResolvedValue(undefined) };
+    notifications = { notifyOwner: jest.fn().mockResolvedValue(undefined) };
     service = new ModerationService(
       prisma as never,
       localisations as unknown as LocalisationsService,
+      notifications as unknown as NotificationsService,
     );
   });
 
@@ -46,7 +50,11 @@ describe('ModerationService', () => {
         id: 'rev-2',
         addressId: 'addr-1',
         status: RevisionStatus.EN_ATTENTE_VALIDATION,
-        address: { code: 'AKP-1234', publishedRevisionId: 'rev-1' },
+        address: {
+          code: 'AKP-1234',
+          publishedRevisionId: 'rev-1',
+          userId: 'owner-1',
+        },
       });
       const revUpdate = jest.fn().mockResolvedValue({});
       const addrUpdate = jest.fn().mockResolvedValue({});
@@ -83,6 +91,11 @@ describe('ModerationService', () => {
         where: { id: 'rev-1' },
         data: { status: RevisionStatus.ARCHIVEE },
       });
+      // le propriétaire est notifié de la validation
+      expect(notifications.notifyOwner).toHaveBeenCalledWith(
+        'owner-1',
+        expect.objectContaining({ type: 'ADDRESS_VALIDATED' }),
+      );
     });
 
     it('première publication : aucune archive si pas de version publiée', async () => {
@@ -131,7 +144,11 @@ describe('ModerationService', () => {
         id: 'rev-1',
         addressId: 'addr-1',
         status: RevisionStatus.EN_ATTENTE_VALIDATION,
-        address: { code: 'AKP-1234', publishedRevisionId: null },
+        address: {
+          code: 'AKP-1234',
+          publishedRevisionId: null,
+          userId: 'owner-1',
+        },
       });
       prisma.addressRevision.update.mockResolvedValue({});
 
@@ -143,6 +160,10 @@ describe('ModerationService', () => {
 
       expect(res.status).toBe(RevisionStatus.REJETEE);
       expect(prisma.address.update).not.toHaveBeenCalled();
+      expect(notifications.notifyOwner).toHaveBeenCalledWith(
+        'owner-1',
+        expect.objectContaining({ type: 'ADDRESS_REJECTED' }),
+      );
       expect(prisma.addressRevision.update).toHaveBeenCalledWith({
         where: { id: 'rev-1' },
         data: expect.objectContaining({
@@ -160,7 +181,11 @@ describe('ModerationService', () => {
         id: 'rep-1',
         addressId: 'addr-1',
         status: ReportStatus.PENDING,
-        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+        address: {
+          code: 'AKP-1234',
+          lifecycle: 'ACTIVE',
+          localisationId: 'loc-1',
+        },
       });
       prisma.report.update.mockResolvedValue({});
 
@@ -178,7 +203,11 @@ describe('ModerationService', () => {
       prisma.report.findUnique.mockResolvedValue({
         id: 'rep-1',
         status: ReportStatus.RESOLVED,
-        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+        address: {
+          code: 'AKP-1234',
+          lifecycle: 'ACTIVE',
+          localisationId: 'loc-1',
+        },
       });
       await expect(service.resolveReport('rep-1', 'mod-1')).rejects.toThrow(
         ConflictException,
@@ -199,7 +228,12 @@ describe('ModerationService', () => {
         id: 'rep-1',
         addressId: 'addr-1',
         status: ReportStatus.PENDING,
-        address: { code: 'AKP-1234', lifecycle: 'ACTIVE', localisationId: 'loc-1' },
+        address: {
+          code: 'AKP-1234',
+          lifecycle: 'ACTIVE',
+          localisationId: 'loc-1',
+          userId: 'owner-1',
+        },
       });
       const addrUpdate = jest.fn().mockResolvedValue({});
       const revUpdateMany = jest.fn().mockResolvedValue({});
@@ -212,7 +246,11 @@ describe('ModerationService', () => {
         }),
       );
 
-      const res = await service.deactivateFromReport('rep-1', 'mod-1', 'Fraude');
+      const res = await service.deactivateFromReport(
+        'rep-1',
+        'mod-1',
+        'Fraude',
+      );
 
       expect(res).toMatchObject({
         status: ReportStatus.ACTIONED,
@@ -229,10 +267,17 @@ describe('ModerationService', () => {
         }),
       );
       expect(revUpdateMany).toHaveBeenCalledWith({
-        where: { addressId: 'addr-1', status: RevisionStatus.EN_ATTENTE_VALIDATION },
+        where: {
+          addressId: 'addr-1',
+          status: RevisionStatus.EN_ATTENTE_VALIDATION,
+        },
         data: { status: RevisionStatus.OBSOLETE },
       });
       expect(localisations.cleanupIfEmpty).toHaveBeenCalledWith('loc-1');
+      expect(notifications.notifyOwner).toHaveBeenCalledWith(
+        'owner-1',
+        expect.objectContaining({ type: 'ADDRESS_DEACTIVATED' }),
+      );
     });
 
     it('refuse de désactiver une adresse déjà désactivée (409)', async () => {
@@ -240,7 +285,11 @@ describe('ModerationService', () => {
         id: 'rep-1',
         addressId: 'addr-1',
         status: ReportStatus.PENDING,
-        address: { code: 'AKP-1234', lifecycle: 'DESACTIVEE', localisationId: null },
+        address: {
+          code: 'AKP-1234',
+          lifecycle: 'DESACTIVEE',
+          localisationId: null,
+        },
       });
       await expect(
         service.deactivateFromReport('rep-1', 'mod-1'),
