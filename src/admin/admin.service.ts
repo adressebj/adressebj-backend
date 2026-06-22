@@ -49,6 +49,23 @@ export interface Paginated<T> {
   limit: number;
 }
 
+export interface AdminStats {
+  addresses: {
+    total: number;
+    active: number;
+    deactivated: number;
+    published: number;
+  };
+  quartiers: { total: number; active: number };
+  moderation: {
+    pendingRevisions: number;
+    pendingReports: number;
+    pendingContributions: number;
+  };
+  habitants: number;
+  apiKeysActive: number;
+}
+
 @Injectable()
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
@@ -186,6 +203,51 @@ export class AdminService {
     }));
 
     return { items, total, page, limit };
+  }
+
+  /** Agrégats du tableau de bord administrateur. */
+  async stats(): Promise<AdminStats> {
+    const [
+      total,
+      active,
+      deactivated,
+      published,
+      quartiersTotal,
+      quartiersActive,
+      pendingRevisions,
+      pendingReports,
+      pendingContributions,
+      habitants,
+      apiKeysActive,
+    ] = await Promise.all([
+      this.prisma.address.count(),
+      this.prisma.address.count({ where: { lifecycle: 'ACTIVE' } }),
+      this.prisma.address.count({ where: { lifecycle: 'DESACTIVEE' } }),
+      this.prisma.address.count({ where: { publishedRevisionId: { not: null } } }),
+      this.prisma.quartier.count(),
+      this.prisma.quartier.count({ where: { isActive: true } }),
+      this.prisma.addressRevision.count({
+        where: { status: 'EN_ATTENTE_VALIDATION' },
+      }),
+      this.prisma.report.count({ where: { status: 'PENDING' } }),
+      this.prisma.contribution.count({ where: { status: 'PENDING' } }),
+      this.prisma.user.count({
+        where: { role: Role.HABITANT, deletedAt: null },
+      }),
+      this.prisma.apiKey.count({ where: { status: 'ACTIVE' } }),
+    ]);
+
+    return {
+      addresses: { total, active, deactivated, published },
+      quartiers: { total: quartiersTotal, active: quartiersActive },
+      moderation: {
+        pendingRevisions,
+        pendingReports,
+        pendingContributions,
+      },
+      habitants,
+      apiKeysActive,
+    };
   }
 
   private async loadModerator(id: string): Promise<User> {

@@ -350,4 +350,50 @@ describe('Admin (e2e)', () => {
       expect(res.body.code).toBe('API_KEY_NOT_FOUND');
     });
   });
+
+  describe('tableau de bord & supervision', () => {
+    it('GET /admin/stats → agrégats cohérents', async () => {
+      const res = await http()
+        .get('/api/admin/stats')
+        .set(auth(adminToken))
+        .expect(200);
+      expect(res.body.data.addresses.published).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.quartiers.total).toBeGreaterThanOrEqual(1);
+      expect(res.body.data).toHaveProperty('moderation.pendingReports');
+      expect(res.body.data).toHaveProperty('habitants');
+    });
+
+    it('GET /admin/quartiers → liste tous statuts + compteurs', async () => {
+      const res = await http()
+        .get('/api/admin/quartiers')
+        .set(auth(adminToken))
+        .expect(200);
+      const row = res.body.data.find(
+        (q: { prefix: string }) => q.prefix === prefix,
+      );
+      expect(row).toBeTruthy();
+      expect(row).toHaveProperty('addressCount');
+      expect(row).toHaveProperty('isActive');
+    });
+
+    it('PATCH /admin/addresses/:code/deactivate → DESACTIVEE puis 410, re-désactivation 409', async () => {
+      const res = await http()
+        .patch(`/api/admin/addresses/${addressCode}/deactivate`)
+        .set(auth(adminToken))
+        .send({ reason: 'Test admin' })
+        .expect(200);
+      expect(res.body.data).toEqual({
+        code: addressCode,
+        lifecycle: 'DESACTIVEE',
+      });
+
+      await http().get(`/api/addresses/${addressCode}`).expect(410);
+
+      const again = await http()
+        .patch(`/api/admin/addresses/${addressCode}/deactivate`)
+        .set(auth(adminToken))
+        .expect(409);
+      expect(again.body.code).toBe('ADDRESS_ALREADY_DEACTIVATED');
+    });
+  });
 });

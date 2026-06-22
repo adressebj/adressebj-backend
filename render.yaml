@@ -52,7 +52,10 @@ services:
         value: '3000'
       - key: ROUTING_FALLBACK_SPEED_KMH
         value: '25'
-      # URL du frontend déployé (CORS) — à renseigner.
+      # URL du frontend déployé (CORS) — à renseigner dans le dashboard.
+      # Valeur de prod : https://adressebj.vercel.app (sans slash final ; liste
+      # séparée par des virgules pour plusieurs origines). NB : ce n'est PAS
+      # adressebj-frontend.vercel.app — le projet Vercel est « adressebj ».
       - key: ALLOWED_ORIGINS
         sync: false
       # Cloudinary (upload photos signé).

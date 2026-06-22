@@ -25,6 +25,7 @@ import {
   MyAddress,
   RateResult,
   ReportResult,
+  RevisionView,
   UpdatedAddress,
 } from './addresses.service';
 import { CreateAddressDto } from './dto/create-address.dto';
@@ -56,6 +57,15 @@ export class AddressesController {
   @ApiOperation({ summary: 'Mes adresses et leur état' })
   mine(@CurrentUser() user: AuthUser): Promise<MyAddress[]> {
     return this.addresses.listMine(user.id);
+  }
+
+  @Get(':code/revisions')
+  @ApiOperation({ summary: 'Historique des versions de mon adresse' })
+  revisions(
+    @CurrentUser() user: AuthUser,
+    @Param('code') code: string,
+  ): Promise<RevisionView[]> {
+    return this.addresses.listRevisions(user.id, code);
   }
 
   @Post(':code/rate')

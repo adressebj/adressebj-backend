@@ -16,6 +16,19 @@ export interface QuartierSummary {
   prefix: string;
 }
 
+/** Vue admin d'un quartier : tous statuts, centre/polygone, et nombre d'adresses rattachées. */
+export interface AdminQuartierRow {
+  id: string;
+  name: string;
+  prefix: string;
+  isActive: boolean;
+  centerLat: number | null;
+  centerLng: number | null;
+  hasPolygon: boolean;
+  addressCount: number;
+  createdAt: Date;
+}
+
 export interface QuartierAnalytics {
   quartierId: string;
   quartierName: string;
@@ -104,6 +117,47 @@ export class QuartiersService {
     }
 
     return this.prisma.quartier.update({ where: { id }, data });
+  }
+
+  /** Liste admin de tous les quartiers (actifs et inactifs) avec compteur d'adresses. */
+  async listAllForAdmin(): Promise<AdminQuartierRow[]> {
+    const quartiers = await this.prisma.quartier.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { localisations: true } } },
+    });
+    // Le compteur d'adresses vivantes par quartier (via localisations).
+    const counts = await this.prisma.address.groupBy({
+      by: ['localisationId'],
+      where: { lifecycle: { not: 'DESACTIVEE' }, localisationId: { not: null } },
+      _count: { _all: true },
+    });
+    const locToAddrCount = new Map<string, number>();
+    for (const c of counts) {
+      if (c.localisationId) locToAddrCount.set(c.localisationId, c._count._all);
+    }
+    const localisations = await this.prisma.localisation.findMany({
+      select: { id: true, quartierId: true },
+    });
+    const quartierAddrCount = new Map<string, number>();
+    for (const loc of localisations) {
+      const n = locToAddrCount.get(loc.id) ?? 0;
+      quartierAddrCount.set(
+        loc.quartierId,
+        (quartierAddrCount.get(loc.quartierId) ?? 0) + n,
+      );
+    }
+
+    return quartiers.map((q) => ({
+      id: q.id,
+      name: q.name,
+      prefix: q.prefix,
+      isActive: q.isActive,
+      centerLat: q.centerLat,
+      centerLng: q.centerLng,
+      hasPolygon: q.polygon !== null,
+      addressCount: quartierAddrCount.get(q.id) ?? 0,
+      createdAt: q.createdAt,
+    }));
   }
 
   /** Liste des quartiers actifs (référentiel public). */

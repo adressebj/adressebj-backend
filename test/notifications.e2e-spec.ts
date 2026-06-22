@@ -124,6 +124,22 @@ describe('Notifications (e2e)', () => {
     });
   });
 
+  it('POST /notifications/read-all → marque tout lu', async () => {
+    const res = await http()
+      .post('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${habToken}`)
+      .expect(200);
+    expect(res.body.data.updated).toBeGreaterThanOrEqual(1);
+
+    const list = await http()
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${habToken}`)
+      .expect(200);
+    expect(list.body.data.every((n: { readAt: string | null }) => n.readAt)).toBe(
+      true,
+    );
+  });
+
   it('DELETE /notifications/unsubscribe (JWT) → 200, abonnement supprimé', async () => {
     const res = await http()
       .delete('/api/notifications/unsubscribe')

@@ -119,6 +119,15 @@ export class NotificationsService {
     }));
   }
 
+  /** Marque toutes les notifications non lues de l'habitant comme lues. */
+  async markAllRead(userId: string): Promise<{ updated: number }> {
+    const { count } = await this.prisma.notification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { updated: count };
+  }
+
   /**
    * Persiste une notification pour `userId` et tente l'envoi push best-effort vers
    * tous ses abonnements. Les endpoints morts (404/410) sont purgés. N'échoue jamais.
