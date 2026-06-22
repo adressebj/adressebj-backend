@@ -16,12 +16,28 @@ import { PrismaService } from '../prisma/prisma.service';
 /** Au-delà de cette inactivité du propriétaire, un signalement est présenté avec présomption de validité. */
 const INACTIVE_OWNER_DAYS = 90;
 
+/**
+ * Masque un numéro pour l'affichage modération : on ne révèle que les deux
+ * derniers chiffres (`+229 •••• •• 42`). Tombstone (téléphone null) → tirets.
+ */
+function maskPhone(phone: string | null): string {
+  if (!phone) return '••••••••';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 2) return '••••••••';
+  return `••••••${digits.slice(-2)}`;
+}
+
 export interface PendingRevision {
   id: string;
   addressCode: string;
   category: string;
+  steps: string[];
   assembledText: string;
   photoUrl: string;
+  gps: { lat: number; lng: number };
+  gpsAccuracyMeters: number;
+  quartierName: string;
+  ownerPhoneMasked: string;
   createdAt: Date;
   owner: { id: string; firstName: string | null; lastName: string | null };
   isFirstPublication: boolean;
@@ -82,7 +98,10 @@ export class ModerationService {
           select: {
             code: true,
             publishedRevisionId: true,
-            user: { select: { id: true, firstName: true, lastName: true } },
+            user: {
+              select: { id: true, firstName: true, lastName: true, phone: true },
+            },
+            localisation: { select: { quartier: { select: { name: true } } } },
           },
         },
       },
@@ -92,10 +111,21 @@ export class ModerationService {
       id: r.id,
       addressCode: r.address.code,
       category: r.category,
+      steps: (r.steps as string[]) ?? [],
       assembledText: r.assembledText,
       photoUrl: r.photoUrl,
+      gps: { lat: r.gpsLat, lng: r.gpsLng },
+      // La précision de capture n'est pas stockée ; on expose la tolérance de
+      // rattachement (15 m) comme borne indicative pour le modérateur.
+      gpsAccuracyMeters: 15,
+      quartierName: r.address.localisation?.quartier.name ?? '',
+      ownerPhoneMasked: maskPhone(r.address.user.phone),
       createdAt: r.createdAt,
-      owner: r.address.user,
+      owner: {
+        id: r.address.user.id,
+        firstName: r.address.user.firstName,
+        lastName: r.address.user.lastName,
+      },
       isFirstPublication: r.address.publishedRevisionId == null,
     }));
   }

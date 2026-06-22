@@ -11,14 +11,24 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiKey, Quartier, Role } from '@prisma/client';
+import {
+  AddressesService,
+  DeactivatedAddress,
+} from '../addresses/addresses.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { QuartiersService } from '../quartiers/quartiers.service';
+import { AuthUser } from '../auth/types/jwt-payload';
+import {
+  AdminQuartierRow,
+  QuartiersService,
+} from '../quartiers/quartiers.service';
 import {
   AdminAddressRow,
   AdminService,
+  AdminStats,
   Paginated,
   StaffView,
   SuspensionView,
@@ -28,6 +38,7 @@ import { CreateQuartierDto } from '../quartiers/dto/create-quartier.dto';
 import { UpdateQuartierDto } from '../quartiers/dto/update-quartier.dto';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 import { CreateModeratorDto } from './dto/create-moderator.dto';
+import { DeactivateAddressDto } from './dto/deactivate-address.dto';
 import { SuspendUserDto } from './dto/suspend-user.dto';
 import { UpdateModeratorDto } from './dto/update-moderator.dto';
 
@@ -42,9 +53,23 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly quartiers: QuartiersService,
     private readonly apiKeys: ApiKeysService,
+    private readonly addresses: AddressesService,
   ) {}
 
+  // ── Tableau de bord ─────────────────────────────────────────────────────────
+  @Get('stats')
+  @ApiOperation({ summary: 'Agrégats du tableau de bord administrateur' })
+  stats(): Promise<AdminStats> {
+    return this.admin.stats();
+  }
+
   // ── Quartiers ──────────────────────────────────────────────────────────────
+  @Get('quartiers')
+  @ApiOperation({ summary: 'Liste des quartiers (tous statuts + compteurs)' })
+  listQuartiers(): Promise<AdminQuartierRow[]> {
+    return this.quartiers.listAllForAdmin();
+  }
+
   @Post('quartiers')
   @ApiOperation({ summary: 'Créer un quartier' })
   createQuartier(@Body() dto: CreateQuartierDto): Promise<Quartier> {
@@ -67,6 +92,16 @@ export class AdminController {
     @Query() query: AdminAddressesQueryDto,
   ): Promise<Paginated<AdminAddressRow>> {
     return this.admin.listAddresses(query);
+  }
+
+  @Patch('addresses/:code/deactivate')
+  @ApiOperation({ summary: 'Désactiver directement une adresse (admin)' })
+  deactivateAddress(
+    @CurrentUser() user: AuthUser,
+    @Param('code') code: string,
+    @Body() dto: DeactivateAddressDto,
+  ): Promise<DeactivatedAddress> {
+    return this.addresses.deactivateByStaff(code, user.id, dto.reason);
   }
 
   // ── Modérateurs ─────────────────────────────────────────────────────────────

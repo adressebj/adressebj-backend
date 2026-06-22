@@ -14,6 +14,7 @@ import { ChangePhoneDto } from './dto/change-phone.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { SmsService } from './sms/sms.service';
 import { JwtPayload } from './types/jwt-payload';
@@ -170,6 +171,78 @@ export class AuthService {
     const updated = await this.prisma.user.update({
       where: { id: user.id },
       data: { lastSessionAt: new Date() },
+    });
+    return this.buildAuthResult(updated);
+  }
+
+  /** Profil de l'utilisateur authentifié (bootstrap frontend après rechargement). */
+  async me(userId: string): Promise<PublicUser> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedException({
+        code: 'INVALID_TOKEN',
+        message: 'Session invalide.',
+      });
+    }
+    return this.toPublicUser(user);
+  }
+
+  /**
+   * Demande de réinitialisation de mot de passe habitant (par OTP SMS).
+   * **Non-énumérant** : on n'envoie un code que si un compte habitant vivant existe,
+   * mais la réponse est toujours `{ sent: true }` (ne révèle jamais l'existence du compte).
+   */
+  async requestPasswordReset(dto: RequestOtpDto): Promise<{ sent: true }> {
+    const user = await this.prisma.user.findUnique({
+      where: { phone: dto.phone },
+    });
+    if (user && !user.deletedAt && user.role === Role.HABITANT) {
+      const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+      await this.prisma.otpCode.create({
+        data: {
+          phone: dto.phone,
+          code,
+          expiresAt: new Date(Date.now() + OTP_TTL_MS),
+        },
+      });
+      await this.sms.sendOtp(dto.phone, code);
+    }
+    return { sent: true };
+  }
+
+  /**
+   * Réinitialisation effective : vérifie l'OTP, définit le nouveau mot de passe et
+   * connecte l'habitant (renvoie un JWT). Compte inconnu OU OTP erroné → même erreur
+   * générique `OTP_INVALID` (non-énumérant).
+   */
+  async resetPassword(dto: ResetPasswordDto): Promise<AuthResult> {
+    const [otp, user] = await Promise.all([
+      this.prisma.otpCode.findFirst({
+        where: {
+          phone: dto.phone,
+          code: dto.code,
+          used: false,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.findUnique({ where: { phone: dto.phone } }),
+    ]);
+    if (!otp || !user || user.deletedAt || user.role !== Role.HABITANT) {
+      throw new UnauthorizedException({
+        code: 'OTP_INVALID',
+        message: 'Code OTP invalide ou expiré.',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id: user.id },
+        data: { password: passwordHash, lastSessionAt: new Date() },
+      });
+      await tx.otpCode.update({ where: { id: otp.id }, data: { used: true } });
+      return u;
     });
     return this.buildAuthResult(updated);
   }

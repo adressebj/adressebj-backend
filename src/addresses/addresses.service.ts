@@ -123,6 +123,20 @@ export interface DeactivatedAddress {
   lifecycle: 'DESACTIVEE';
 }
 
+/** Une version de contenu d'une adresse, exposée au propriétaire (historique). */
+export interface RevisionView {
+  id: string;
+  status: RevisionStatus;
+  category: string;
+  steps: unknown;
+  assembledText: string;
+  photoUrl: string;
+  rejectionReason: string | null;
+  isPublished: boolean;
+  reviewedAt: Date | null;
+  createdAt: Date;
+}
+
 export interface MapMarker {
   code: string;
   category: string;
@@ -606,6 +620,90 @@ export class AddressesService {
     }
 
     return { code: address.code, lifecycle: 'DESACTIVEE' };
+  }
+
+  /**
+   * Désactivation directe par un membre du staff (admin), sans signalement préalable.
+   * Cœur identique à la désactivation propriétaire (DESACTIVEE, révision en attente
+   * → OBSOLETE, cleanupIfEmpty) + notification du propriétaire (motif optionnel).
+   */
+  async deactivateByStaff(
+    code: string,
+    actorId: string,
+    reason?: string,
+  ): Promise<DeactivatedAddress> {
+    const address = await this.prisma.address.findUnique({ where: { code } });
+    if (!address) {
+      throw new NotFoundException({
+        code: 'ADDRESS_NOT_FOUND',
+        message: 'Adresse introuvable.',
+      });
+    }
+    if (address.lifecycle === 'DESACTIVEE') {
+      throw new ConflictException({
+        code: 'ADDRESS_ALREADY_DEACTIVATED',
+        message: 'Cette adresse est déjà désactivée.',
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.address.update({
+        where: { id: address.id },
+        data: {
+          lifecycle: 'DESACTIVEE',
+          deactivatedAt: new Date(),
+          deactivatedById: actorId,
+          deactivationReason: reason ?? null,
+        },
+      });
+      await tx.addressRevision.updateMany({
+        where: {
+          addressId: address.id,
+          status: RevisionStatus.EN_ATTENTE_VALIDATION,
+        },
+        data: { status: RevisionStatus.OBSOLETE },
+      });
+    });
+
+    if (address.localisationId) {
+      await this.localisations.cleanupIfEmpty(address.localisationId);
+    }
+
+    await this.notifications.notifyOwner(address.userId, {
+      type: NotificationType.ADDRESS_DEACTIVATED,
+      message: reason
+        ? `Votre adresse ${address.code} a été désactivée par la modération. Motif : ${reason}`
+        : `Votre adresse ${address.code} a été désactivée par la modération.`,
+      addressId: address.id,
+      url: `/dashboard/address/${address.code}`,
+    });
+
+    return { code: address.code, lifecycle: 'DESACTIVEE' };
+  }
+
+  /**
+   * Historique des versions de contenu d'une adresse (propriétaire uniquement).
+   * Sert à la vue propriétaire : afficher le contenu d'une version en attente ou
+   * rejetée (avec motif), ainsi que la version actuellement publiée. Plus récentes d'abord.
+   */
+  async listRevisions(userId: string, code: string): Promise<RevisionView[]> {
+    const address = await this.loadOwnedAddress(code, userId);
+    const revisions = await this.prisma.addressRevision.findMany({
+      where: { addressId: address.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    return revisions.map((r) => ({
+      id: r.id,
+      status: r.status,
+      category: r.category,
+      steps: r.steps,
+      assembledText: r.assembledText,
+      photoUrl: r.photoUrl,
+      rejectionReason: r.rejectionReason,
+      isPublished: r.id === address.publishedRevisionId,
+      reviewedAt: r.reviewedAt,
+      createdAt: r.createdAt,
+    }));
   }
 
   /**

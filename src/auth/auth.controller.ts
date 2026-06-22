@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   HttpCode,
   HttpStatus,
   Patch,
@@ -21,6 +22,7 @@ import { DeleteAccountDto } from './dto/delete-account.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthUser } from './types/jwt-payload';
@@ -52,6 +54,32 @@ export class AuthController {
   })
   login(@Body() dto: LoginDto): Promise<AuthResult> {
     return this.auth.login(dto);
+  }
+
+  @Post('password-reset/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Demande de réinitialisation de mot de passe habitant (OTP SMS)',
+  })
+  requestPasswordReset(@Body() dto: RequestOtpDto): Promise<{ sent: true }> {
+    return this.auth.requestPasswordReset(dto);
+  }
+
+  @Post('password-reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Réinitialiser le mot de passe habitant (vérifie OTP → JWT)',
+  })
+  resetPassword(@Body() dto: ResetPasswordDto): Promise<AuthResult> {
+    return this.auth.resetPassword(dto);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Profil de l’utilisateur authentifié' })
+  me(@CurrentUser() user: AuthUser): Promise<PublicUser> {
+    return this.auth.me(user.id);
   }
 
   @Patch('profile')
