@@ -141,6 +141,15 @@ describe('Moderation revisions (e2e)', () => {
     );
     expect(item).toBeTruthy();
     expect(item.isFirstPublication).toBe(true);
+    // Payload enrichi : de quoi afficher la fiche complète côté modération.
+    expect(Array.isArray(item.steps)).toBe(true);
+    expect(item.gps).toMatchObject({
+      lat: expect.any(Number),
+      lng: expect.any(Number),
+    });
+    expect(typeof item.gpsAccuracyMeters).toBe('number');
+    expect(typeof item.quartierName).toBe('string');
+    expect(item.ownerPhoneMasked).toMatch(/^•+\d{2}$/);
 
     const approved = await http()
       .patch(`/api/moderation/revisions/${item.id}/approve`)

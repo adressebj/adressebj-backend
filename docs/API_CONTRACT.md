@@ -424,7 +424,7 @@ Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Beare
 
 > Réservé aux rôles `MODERATEUR`/`ADMIN`. Un habitant reçoit `403`.
 
-- **File 1 — Révisions** : `GET /moderation/revisions` · `PATCH /moderation/revisions/:id/approve` · `PATCH /moderation/revisions/:id/reject` (body `{ "reason": "…" }`, obligatoire).
+- **File 1 — Révisions** : `GET /moderation/revisions` · `PATCH /moderation/revisions/:id/approve` · `PATCH /moderation/revisions/:id/reject` (body `{ "reason": "…" }`, obligatoire). Chaque item : `{ "id", "addressCode", "category", "steps": string[], "assembledText", "photoUrl", "gps": { "lat", "lng" }, "gpsAccuracyMeters", "quartierName", "ownerPhoneMasked", "createdAt", "owner": { "id", "firstName", "lastName" }, "isFirstPublication" }` — de quoi afficher la fiche complète à modérer (carte + étapes + propriétaire masqué). `gpsAccuracyMeters` = tolérance de rattachement (15 m), la précision de capture n'étant pas stockée.
 - **File 2 — Signalements** : `GET /moderation/reports` (chaque item porte `ownerInactiveOver90Days`, aide à la décision) · `PATCH /moderation/reports/:id/resolve` · `PATCH /moderation/reports/:id/deactivate` (body `{ "reason": "…" }` facultatif ; désactive l'adresse signalée → `410` public).
 - **File 3 — Contributions** : `GET /moderation/contributions` · `PATCH /moderation/contributions/:id/approve` (publiée en note terrain) · `PATCH /moderation/contributions/:id/reject`.
 
