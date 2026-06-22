@@ -57,4 +57,11 @@ export class NotificationsController {
   list(@CurrentUser() user: AuthUser): Promise<NotificationItem[]> {
     return this.notifications.list(user.id);
   }
+
+  @Post('read-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Marquer toutes les notifications comme lues' })
+  markAllRead(@CurrentUser() user: AuthUser): Promise<{ updated: number }> {
+    return this.notifications.markAllRead(user.id);
+  }
 }

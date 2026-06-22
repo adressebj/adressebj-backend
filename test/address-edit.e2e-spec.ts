@@ -170,6 +170,30 @@ describe('Address edit lifecycle (e2e)', () => {
     expect(pub.body.data.assembledText).toBe('Nouveau repère. Portail vert.');
   });
 
+  it('historique des révisions (propriétaire) : plus récente d’abord, version publiée marquée', async () => {
+    const res = await http()
+      .get(`/api/addresses/${code}/revisions`)
+      .set(auth(ownerToken))
+      .expect(200);
+    const revs = res.body.data as Array<{
+      assembledText: string;
+      status: string;
+      isPublished: boolean;
+    }>;
+    expect(revs.length).toBe(2);
+    expect(revs[0].assembledText).toBe('Nouveau repère. Portail vert.');
+    expect(revs[0].isPublished).toBe(true);
+    expect(revs[0].status).toBe('PUBLIEE');
+    expect(revs[1].isPublished).toBe(false);
+  });
+
+  it('historique des révisions par un non-propriétaire → 403', async () => {
+    await http()
+      .get(`/api/addresses/${code}/revisions`)
+      .set(auth(intruderToken))
+      .expect(403);
+  });
+
   it('un non-propriétaire ne peut pas modifier (403)', async () => {
     const res = await http()
       .patch(`/api/addresses/${code}`)

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AddressesModule } from '../addresses/addresses.module';
 import { QuartiersModule } from '../quartiers/quartiers.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
@@ -9,7 +10,7 @@ import { AdminService } from './admin.service';
  * et ApiKeysService (clés, module global) ; AdminService porte la gestion des comptes.
  */
 @Module({
-  imports: [QuartiersModule],
+  imports: [QuartiersModule, AddressesModule],
   controllers: [AdminController],
   providers: [AdminService],
 })

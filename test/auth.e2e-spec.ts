@@ -109,6 +109,65 @@ describe('Auth (e2e)', () => {
     await prisma.user.update({ where: { phone }, data: { status: 'ACTIVE' } });
   });
 
+  it('GET /auth/me renvoie le profil de l’utilisateur authentifié', async () => {
+    const login = await http()
+      .post('/api/auth/login')
+      .send({ phone, password })
+      .expect(200);
+    const token = login.body.data.token as string;
+
+    const me = await http()
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(me.body.data.email).toBe(email);
+    expect(me.body.data.role).toBe('HABITANT');
+  });
+
+  it('GET /auth/me sans token → 401', async () => {
+    await http().get('/api/auth/me').expect(401);
+  });
+
+  it('password-reset/request est non-énumérant pour un numéro inconnu (200)', async () => {
+    const res = await http()
+      .post('/api/auth/password-reset/request')
+      .send({ phone: '+22998999999' })
+      .expect(200);
+    expect(res.body.data.sent).toBe(true);
+  });
+
+  it('reset mot de passe habitant par OTP → nouveau mot de passe utilisable', async () => {
+    await http()
+      .post('/api/auth/password-reset/request')
+      .send({ phone })
+      .expect(200);
+    const otp = await prisma.otpCode.findFirst({
+      where: { phone, used: false },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(otp).toBeTruthy();
+
+    const newPassword = 'nouveaumotdepasse123';
+    const reset = await http()
+      .post('/api/auth/password-reset')
+      .send({ phone, code: otp!.code, password: newPassword })
+      .expect(200);
+    expect(reset.body.data.token).toBeDefined();
+
+    await http()
+      .post('/api/auth/login')
+      .send({ phone, password: newPassword })
+      .expect(200);
+  });
+
+  it('reset refuse un OTP invalide (401 OTP_INVALID)', async () => {
+    const res = await http()
+      .post('/api/auth/password-reset')
+      .send({ phone, code: '000000', password: 'peuimporte123' })
+      .expect(401);
+    expect(res.body.code).toBe('OTP_INVALID');
+  });
+
   it('refuse un champ inconnu (whitelist, 400)', async () => {
     await http()
       .post('/api/auth/request-otp')

@@ -65,6 +65,26 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 ### `POST /auth/request-otp`
 - _(à compléter)_
 
+### `GET /auth/me` — Profil de l'utilisateur authentifié (JWT)
+
+- **Auth** : `Authorization: Bearer <jwt>`.
+- **Réponse 200** : `{ "data": { "id", "phone", "email", "firstName", "lastName", "role" } }` (`role` ∈ `HABITANT | MODERATEUR | ADMIN`).
+- **Usage** : bootstrap du profil après rechargement (le frontend ne devine pas le profil depuis le seul JWT).
+- **Erreurs** : `401` (sans JWT ou session invalide).
+
+### `POST /auth/password-reset/request` — Demande de réinitialisation (habitant, OTP SMS)
+
+- **Auth** : aucune.
+- **Body** : `{ "phone": "+22997000000" }`.
+- **Réponse 200** : `{ "data": { "sent": true } }`. **Non-énumérant** : la réponse est toujours `{ sent: true }` ; un code n'est réellement envoyé que si un compte habitant vivant existe.
+
+### `POST /auth/password-reset` — Réinitialiser le mot de passe (habitant, OTP)
+
+- **Auth** : aucune.
+- **Body** : `{ "phone": "+22997000000", "code": "123456", "password": "nouveaumdp" }` (`password` ≥ 8 car.).
+- **Réponse 200** : `{ "data": { "token": "eyJ…", "user": { … } } }` — l'habitant est reconnecté.
+- **Erreurs** : `401 OTP_INVALID` (compte inconnu **ou** OTP absent/expiré/erroné — même erreur, non-énumérant).
+
 ### `PATCH /auth/profile` — Modifier son profil (habitant, JWT)
 
 - **Auth** : `Authorization: Bearer <jwt>`.
@@ -103,7 +123,7 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 }
 ```
 
-- `category` ∈ `DOMICILE | COMMERCE | SERVICE_PUBLIC | SANTE | EDUCATION | AUTRE`. `steps` : 1 à 20 étapes, chacune 1–280 car. `photoUrl` : URL absolue (obtenue via `POST /upload/signature` puis upload direct Cloudinary). `gpsLat`/`gpsLng` : position du portail.
+- `category` ∈ `DOMICILE | COMMERCE | RESTAURATION | SANTE | EDUCATION | ADMINISTRATION | LOISIR | AUTRE`. `steps` : 1 à 20 étapes, chacune 1–280 car. `photoUrl` : URL absolue (obtenue via `POST /upload/signature` puis upload direct Cloudinary). `gpsLat`/`gpsLng` : position du portail.
 - **Le client ne fournit jamais de `localisationId`** : la localisation est résolue côté serveur depuis le GPS (rattachement à une localisation existante dans un rayon de 15 m, sinon création), et le quartier en est déduit.
 - **Réponse 201** : `{ "data": { "code": "AKP-7X3K", "lifecycle": "ACTIVE", "revisionStatus": "EN_ATTENTE_VALIDATION" } }`.
 - La création produit la **révision n°1**, soumise à modération : l'adresse existe (`code` permanent) mais **n'est pas encore publique** tant que la révision n'est pas approuvée (`GET /addresses/:code` renvoie alors `404`).
@@ -133,6 +153,22 @@ Mis à jour **avant** que le frontend branche un endpoint. C'est la source de v�
 - `published` = `true` dès qu'une version a été approuvée et est servie publiquement ; une adresse fraîchement créée a `published: false` et `currentRevisionStatus: "EN_ATTENTE_VALIDATION"`. `category` reflète la version publiée si elle existe, sinon la dernière révision en date.
 - `currentRevisionStatus` ∈ `EN_ATTENTE_VALIDATION | PUBLIEE | REJETEE | ARCHIVEE | OBSOLETE` (ou `null` si aucune révision). C'est le statut qui pilote l'affichage de l'état côté espace habitant (en attente, publiée, refusée + motif via la page de détail).
 - **Erreurs** : `401` (sans JWT).
+
+### `GET /addresses/:code/revisions` — Historique des versions (propriétaire, JWT)
+
+- **Auth** : `Authorization: Bearer <jwt propriétaire>`.
+- **Réponse 200** : tableau des versions, **plus récentes d'abord** :
+
+```json
+{ "data": [
+  { "id": "…", "status": "PUBLIEE", "category": "COMMERCE", "steps": ["…"],
+    "assembledText": "…", "photoUrl": "https://…", "rejectionReason": null,
+    "isPublished": true, "reviewedAt": "…", "createdAt": "…" }
+] }
+```
+
+- `status` ∈ `EN_ATTENTE_VALIDATION | PUBLIEE | ARCHIVEE | REJETEE | OBSOLETE`. Sert à afficher le contenu d'une version en attente ou rejetée (avec `rejectionReason`) côté espace propriétaire. `isPublished` = version actuellement servie au public.
+- **Erreurs** : `404 ADDRESS_NOT_FOUND`, `403 NOT_ADDRESS_OWNER`.
 
 ### `GET /addresses/:code` — Page publique (visiteur)
 
@@ -350,6 +386,11 @@ Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Beare
 
 > **Déclencheurs** (côté serveur, automatiques) : validation d'une révision (`ADDRESS_VALIDATED`), rejet d'une révision avec motif (`ADDRESS_REJECTED`), désactivation par la modération (`ADDRESS_DEACTIVATED`), et franchissement à la baisse du seuil de fiabilité moyenne < 2,5/5 au-delà de 3 évaluations (`RELIABILITY_WARNING`).
 
+#### `POST /notifications/read-all` — Tout marquer comme lu
+
+- **Auth** : `Authorization: Bearer <jwt>`.
+- **Réponse 200** : `{ "data": { "updated": <n> } }` — nombre de notifications passées de non lues à lues.
+
 ### `GET /quartiers` — Liste des quartiers actifs (public)
 
 - **Auth** : aucune.
@@ -391,12 +432,17 @@ Le mode est déterminé par l'en-tête : avec une clé API `Authorization: Beare
 
 > Réservé au rôle `ADMIN` (strictement, pas Modérateur). Tout autre rôle reçoit `403 INSUFFICIENT_ROLE`.
 
+**Tableau de bord**
+- `GET /admin/stats` — **200** → `{ "data": { "addresses": { "total", "active", "deactivated", "published" }, "quartiers": { "total", "active" }, "moderation": { "pendingRevisions", "pendingReports", "pendingContributions" }, "habitants", "apiKeysActive" } }`.
+
 **Quartiers**
+- `GET /admin/quartiers` — liste **tous** les quartiers (actifs et inactifs) avec compteur d'adresses. **200** → `{ "data": [ { "id", "name", "prefix", "isActive", "centerLat", "centerLng", "hasPolygon", "addressCount", "createdAt" } ] }`.
 - `POST /admin/quartiers` — Body `{ "name", "prefix", "centerLat"?, "centerLng"?, "polygon"? }`. `prefix` : 2–6 caractères `A–Z`/`0–9`, unique. **201** → quartier créé. Erreur `409 QUARTIER_PREFIX_TAKEN`.
 - `PATCH /admin/quartiers/:id` — Body partiel `{ "name"?, "prefix"?, "centerLat"?, "centerLng"?, "polygon"?, "isActive"? }`. **200** → quartier mis à jour. Erreurs `404 QUARTIER_NOT_FOUND`, `409 QUARTIER_PREFIX_TAKEN`.
 
 **Supervision du référentiel**
 - `GET /admin/addresses?code=&quartierId=&lifecycle=&category=&page=&limit=` — filtres optionnels (`code` = préfixe insensible à la casse) + pagination (`page` ≥ 1, `limit` 1–100, défaut 20). **200** → `{ "data": { "items": [ { "code", "category", "lifecycle", "published", "quartier": { "name", "prefix" }, "ownerId", "ownerDeleted", "createdAt" } ], "total", "page", "limit" } }`.
+- `PATCH /admin/addresses/:code/deactivate` — désactivation directe d'une adresse par l'admin (sans signalement préalable). Body `{ "reason"? }` (≤ 500 car.). **200** → `{ "data": { "code", "lifecycle": "DESACTIVEE" } }` ; applique la règle des adresses désactivées (révision en attente → obsolète, localisation purgée si vide) et **notifie le propriétaire**. Erreurs `404 ADDRESS_NOT_FOUND`, `409 ADDRESS_ALREADY_DEACTIVATED`. **Aucune réactivation** : `DESACTIVEE` est terminal.
 
 **Comptes Modérateurs**
 - `POST /admin/moderators` — Body `{ "email", "password", "firstName"?, "lastName"? }`. **201** → `{ "data": { "id", "email", "firstName", "lastName", "role": "MODERATEUR", "status": "ACTIVE" } }`. Erreur `409 EMAIL_ALREADY_REGISTERED`.
