@@ -46,6 +46,9 @@ export interface MyAddress {
   published: boolean;
   category: string | null;
   currentRevisionStatus: RevisionStatus | null;
+  photoUrl: string | null;
+  quartierName: string | null;
+  gps: { lat: number; lng: number } | null;
   createdAt: Date;
 }
 
@@ -253,17 +256,34 @@ export class AddressesService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       include: {
-        publishedRevision: { select: { category: true } },
+        publishedRevision: {
+          select: {
+            category: true,
+            photoUrl: true,
+            gpsLat: true,
+            gpsLng: true,
+          },
+        },
         revisions: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { category: true, status: true },
+          select: {
+            category: true,
+            status: true,
+            photoUrl: true,
+            gpsLat: true,
+            gpsLng: true,
+          },
         },
+        localisation: { select: { quartier: { select: { name: true } } } },
       },
     });
 
     return addresses.map((a) => {
       const latest = a.revisions[0] ?? null;
+      // On affiche le contenu réellement visible : la révision publiée si elle
+      // existe, sinon la dernière en date (création en attente de validation).
+      const shown = a.publishedRevision ?? latest;
       return {
         code: a.code,
         lifecycle: a.lifecycle,
@@ -271,6 +291,9 @@ export class AddressesService {
         published: a.publishedRevisionId != null,
         category: a.publishedRevision?.category ?? latest?.category ?? null,
         currentRevisionStatus: latest?.status ?? null,
+        photoUrl: shown?.photoUrl ?? null,
+        quartierName: a.localisation?.quartier.name ?? null,
+        gps: shown ? { lat: shown.gpsLat, lng: shown.gpsLng } : null,
         createdAt: a.createdAt,
       };
     });

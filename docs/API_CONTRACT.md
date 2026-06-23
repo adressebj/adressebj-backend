@@ -144,6 +144,9 @@ Mis √† jour **avant** que le frontend branche un endpoint. C'est la source de v√
       "published": true,
       "category": "COMMERCE",
       "currentRevisionStatus": "PUBLIEE",
+      "photoUrl": "https://res.cloudinary.com/.../portail.jpg",
+      "quartierName": "Akpakpa",
+      "gps": { "lat": 6.366, "lng": 2.412 },
       "createdAt": "2026-05-17T10:00:00Z"
     }
   ]
