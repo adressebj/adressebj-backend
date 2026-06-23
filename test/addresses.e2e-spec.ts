@@ -106,6 +106,13 @@ describe('Addresses creation (e2e)', () => {
     expect(res.body.data[0].currentRevisionStatus).toBe(
       'EN_ATTENTE_VALIDATION',
     );
+    // Champs enrichis pour la carte « Mes adresses » (photo + quartier + GPS).
+    expect(res.body.data[0].photoUrl).toBe(payload.photoUrl);
+    expect(typeof res.body.data[0].quartierName).toBe('string');
+    expect(res.body.data[0].gps).toMatchObject({
+      lat: expect.any(Number),
+      lng: expect.any(Number),
+    });
   });
 
   it('refuse une 2ᵉ adresse au même emplacement (409)', async () => {
