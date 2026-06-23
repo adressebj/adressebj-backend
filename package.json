@@ -1,6 +1,6 @@
 {
   "name": "adressebj-backend",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "API REST d'AdresseBJ — infrastructure d'adressage numérique du Bénin",
   "author": "BADAROU Mouwafic",
   "private": true,
